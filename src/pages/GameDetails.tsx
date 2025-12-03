@@ -280,8 +280,6 @@ const GameDetails = () => {
               {game.download_link && (
                 <a
                   href={game.download_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-lg animate-scale-in"
                   style={{ animationDelay: '0.3s' }}
                 >

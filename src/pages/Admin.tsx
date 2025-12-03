@@ -839,10 +839,9 @@ export default function Admin() {
 
                           <div>
                             <h3 className="font-semibold mb-2">الوصف</h3>
-                            <div 
-                              className="text-muted-foreground prose prose-invert max-w-none"
-                              dangerouslySetInnerHTML={{ __html: parseRichText(form.description) }}
-                            />
+                            <div className="text-muted-foreground leading-relaxed">
+                              {parseRichText(form.description)}
+                            </div>
                           </div>
 
                           {form.features && (
