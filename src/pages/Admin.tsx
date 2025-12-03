@@ -200,13 +200,17 @@ export default function Admin() {
     setIsLoading(true);
 
     try {
+      // Extract first genre as primary category for backwards compatibility
+      const genres = form.genre.split(",").map(g => g.trim().toLowerCase()).filter(g => g);
+      const primaryCategory = genres[0] || "action";
+      
       const gameData = {
         title: form.title,
         slug: generateSlug(form.title),
         image: form.image,
         background_image: form.background_image || null,
         version: form.version,
-        category: form.category,
+        category: primaryCategory,
         size: form.size,
         description: form.description,
         features: form.features.split("\n").filter(f => f.trim()),
@@ -256,7 +260,7 @@ export default function Admin() {
       description: game.description,
       features: (game.features || []).join("\n"),
       developer: game.developer || "",
-      genre: game.genre || "",
+      genre: game.genre || game.category || "",
       rating: String(game.rating || 4.5),
       download_link: game.download_link || "",
       system_requirements_minimum: game.system_requirements_minimum || initialForm.system_requirements_minimum,
@@ -417,33 +421,22 @@ export default function Admin() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="genre">النوع (Genre)</Label>
+                        <Label htmlFor="genre">التصنيف / النوع (Genre) *</Label>
                         <Input
                           id="genre"
                           value={form.genre}
                           onChange={(e) => setForm({ ...form, genre: e.target.value })}
-                          placeholder="Action, Adventure"
+                          placeholder="action, adventure, rpg (مفصولة بفاصلة)"
                           className="glass-card border-border/50"
+                          required
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          يمكنك إضافة أكثر من تصنيف مفصولين بفاصلة
+                        </p>
                       </div>
                     </div>
 
-                    <div className="grid sm:grid-cols-3 gap-4">
-                      <div>
-                        <Label htmlFor="category">التصنيف *</Label>
-                        <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                          <SelectTrigger className="glass-card border-border/50">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.value} value={cat.value}>
-                                {cat.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="size">الحجم *</Label>
                         <Input
@@ -915,7 +908,7 @@ export default function Admin() {
                           </div>
                           <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.2s' }}>
                             <span className="text-muted-foreground">التصنيف</span>
-                            <span className="category-badge">{categories.find(c => c.value === form.category)?.label}</span>
+                            <span className="category-badge">{form.genre || "غير محدد"}</span>
                           </div>
                           <div className="py-2 animate-fade-in" style={{ animationDelay: '0.25s' }}>
                             <span className="text-primary font-medium flex items-center gap-2">

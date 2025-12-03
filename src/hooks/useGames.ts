@@ -135,16 +135,23 @@ export function useGame(slug: string) {
     if (!error && data) {
       setGame(data as unknown as Game);
       
-      // Fetch related games
+      // Fetch related games based on genre
+      const gameGenres = data.genre?.toLowerCase().split(",").map((g: string) => g.trim()) || [data.category];
+      
       const { data: related } = await supabase
         .from("games")
         .select("*")
-        .eq("category", data.category)
         .neq("id", data.id)
-        .limit(6);
+        .limit(12);
       
       if (related) {
-        setRelatedGames(related as unknown as Game[]);
+        // Filter related games by matching genres
+        const filteredRelated = related.filter((r: any) => {
+          const relatedGenres = r.genre?.toLowerCase().split(",").map((g: string) => g.trim()) || [r.category];
+          return relatedGenres.some((rg: string) => gameGenres.includes(rg));
+        }).slice(0, 6);
+        
+        setRelatedGames(filteredRelated as unknown as Game[]);
       }
     }
     setIsLoading(false);

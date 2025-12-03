@@ -9,7 +9,13 @@ const CategoryGames = () => {
   const { games, categories, isLoading } = useGames();
 
   const category = categories.find((c) => c.slug === slug);
-  const categoryGames = games.filter((g) => g.category === slug);
+  
+  // Filter games by checking if genre contains the category slug
+  const categoryGames = games.filter((g) => {
+    if (!g.genre) return g.category === slug;
+    const genres = g.genre.toLowerCase().split(",").map(genre => genre.trim());
+    return genres.includes(slug || "") || g.category === slug;
+  });
 
   if (isLoading) {
     return (
