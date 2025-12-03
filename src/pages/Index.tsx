@@ -1,16 +1,26 @@
+import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { FeaturedCarousel } from "@/components/games/FeaturedCarousel";
 import { GameCard } from "@/components/games/GameCard";
 import { CategoryCard } from "@/components/games/CategoryCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useGames } from "@/hooks/useGames";
+import { Button } from "@/components/ui/button";
 import { Sparkles, Zap, Shield, Clock, Loader2 } from "lucide-react";
+
+const GAMES_PER_PAGE = 12;
 
 const Index = () => {
   const { games, categories, isLoading } = useGames();
+  const [visibleGames, setVisibleGames] = useState(GAMES_PER_PAGE);
   
   const featuredGames = games.filter(g => g.rating && g.rating >= 4.5).slice(0, 5);
-  const recentGames = games.slice(0, 12);
+  const recentGames = games.slice(0, visibleGames);
+  const hasMoreGames = games.length > visibleGames;
+
+  const loadMore = () => {
+    setVisibleGames(prev => prev + GAMES_PER_PAGE);
+  };
 
   if (isLoading) {
     return (
@@ -78,6 +88,20 @@ const Index = () => {
               <GameCard key={game.id} game={game} index={index} />
             ))}
           </div>
+          
+          {/* Load More Button */}
+          {hasMoreGames && (
+            <div className="flex justify-center mt-10">
+              <Button
+                onClick={loadMore}
+                variant="outline"
+                size="lg"
+                className="px-12 py-6 text-lg border-primary/50 hover:bg-primary/10 hover:border-primary transition-all duration-300"
+              >
+                Load More
+              </Button>
+            </div>
+          )}
         </section>
       )}
 
