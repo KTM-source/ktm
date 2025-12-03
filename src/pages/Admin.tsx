@@ -484,13 +484,13 @@ export default function Admin() {
                     <div className="grid sm:grid-cols-2 gap-4">
                       <ImageUpload
                         value={form.image}
-                        onChange={(url) => setForm({ ...form, image: url })}
+                        onChange={(url) => setForm(prev => ({ ...prev, image: url }))}
                         label="الصورة الصغيرة (Portrait) *"
                         aspectRatio="portrait"
                       />
                       <ImageUpload
                         value={form.background_image}
-                        onChange={(url) => setForm({ ...form, background_image: url })}
+                        onChange={(url) => setForm(prev => ({ ...prev, background_image: url }))}
                         label="الخلفية الكبيرة (Landscape)"
                         aspectRatio="landscape"
                       />
