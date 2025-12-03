@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,7 +16,30 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+// Remove lovable badge
+const removeBadge = () => {
+  const badge = document.getElementById('lovable-badge');
+  if (badge) {
+    badge.remove();
+  }
+};
+
+const App = () => {
+  useEffect(() => {
+    // Initial removal
+    removeBadge();
+    
+    // Observer to catch dynamically added badge
+    const observer = new MutationObserver(() => {
+      removeBadge();
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    return () => observer.disconnect();
+  }, []);
+
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -36,6 +60,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;
