@@ -11,8 +11,9 @@ import { toast } from "sonner";
 import { 
   Lock, Plus, Trash2, Edit, LogOut, Gamepad2, Search, 
   ChevronLeft, ChevronRight, Eye, BarChart3, Calendar,
-  Download, Star, ExternalLink
+  Download, Star, ExternalLink, X, User, Check, Tag, HardDrive
 } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface GameForm {
   title: string;
@@ -714,61 +715,254 @@ export default function Admin() {
               </CardContent>
             </Card>
 
-            {/* Preview Card */}
-            {showPreview && form.title && (
-              <Card className="glass-morphism animate-scale-in overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">معاينة صفحة اللعبة</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {/* Preview Hero */}
-                  <div className="relative h-48 overflow-hidden">
-                    <img
-                      src={form.background_image || form.image || "/placeholder.svg"}
-                      alt={form.title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
-                  </div>
+          </div>
+
+          {/* Full Screen Preview Modal */}
+          <Dialog open={showPreview && !!form.title} onOpenChange={setShowPreview}>
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 overflow-hidden glass-morphism border-border/30">
+              <DialogTitle className="sr-only">معاينة صفحة اللعبة</DialogTitle>
+              
+              {/* Close Button */}
+              <button
+                onClick={() => setShowPreview(false)}
+                className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full glass-card flex items-center justify-center hover:bg-destructive/20 hover:border-destructive/50 transition-all duration-300 group"
+              >
+                <X className="w-5 h-5 text-foreground group-hover:text-destructive transition-colors" />
+              </button>
+
+              <div className="h-full overflow-y-auto">
+                {/* Hero Section */}
+                <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
+                  <img
+                    src={form.background_image || form.image || "/placeholder.svg"}
+                    alt={form.title}
+                    className="w-full h-full object-cover animate-blur-in"
+                    onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/30" />
                   
-                  <div className="p-6 -mt-16 relative z-10">
-                    <div className="flex gap-4">
-                      <img
-                        src={form.image || "/placeholder.svg"}
-                        alt={form.title}
-                        className="w-24 h-32 object-cover rounded-lg shadow-lg"
-                        onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
-                      />
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold">{form.title} Free Download</h3>
-                        <div className="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
-                          {form.developer && <span>👤 {form.developer}</span>}
-                          <span>📦 {form.size || "N/A"}</span>
-                          <span>⭐ {form.rating}</span>
+                  {/* Animated glow effect */}
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/10 rounded-full blur-[100px] animate-pulse-glow" />
+                </div>
+
+                <div className="container mx-auto px-6 -mt-32 relative z-10 pb-8">
+                  {/* Breadcrumb */}
+                  <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-6 animate-fade-in">
+                    <span className="hover:text-primary transition-colors duration-300">الرئيسية</span>
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="hover:text-primary transition-colors duration-300 capitalize">
+                      {categories.find(c => c.value === form.category)?.label || form.category}
+                    </span>
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="text-foreground">{form.title}</span>
+                  </nav>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Main Content */}
+                    <div className="lg:col-span-2 space-y-6">
+                      <div className="glass-morphism p-6 md:p-8 animate-slide-up">
+                        <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-4 gradient-text">
+                          {form.title} Free Download
+                        </h1>
+
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
+                          {form.developer && (
+                            <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-full animate-scale-in">
+                              <User className="w-4 h-4 text-primary" />
+                              <span>{form.developer}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-full animate-scale-in" style={{ animationDelay: '0.1s' }}>
+                            <Eye className="w-4 h-4 text-primary" />
+                            <span>0 مشاهدة</span>
+                          </div>
+                          {form.rating && (
+                            <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-full animate-scale-in" style={{ animationDelay: '0.2s' }}>
+                              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                              <span>{form.rating}</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex gap-2 mt-3">
-                          <span className="category-badge">{categories.find(c => c.value === form.category)?.label}</span>
-                          <span className="version-badge">v{form.version}</span>
-                        </div>
+
+                        <p className="text-muted-foreground leading-relaxed mb-8 text-base">
+                          {form.description || "لا يوجد وصف متاح حالياً"}
+                        </p>
+
+                        {form.features && form.features.trim() && (
+                          <div className="space-y-3">
+                            <h3 className="font-display font-bold text-lg mb-4">مميزات اللعبة</h3>
+                            <ul className="space-y-3">
+                              {form.features.split("\n").filter(f => f.trim()).map((feature, index) => (
+                                <li 
+                                  key={index} 
+                                  className="flex items-start gap-3 text-muted-foreground animate-slide-up"
+                                  style={{ animationDelay: `${index * 0.05}s` }}
+                                >
+                                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <Check className="w-3 h-3 text-primary" />
+                                  </div>
+                                  <span>{feature}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    
-                    <div className="mt-4 text-sm text-muted-foreground line-clamp-3">
-                      {form.description || "لا يوجد وصف"}
+
+                      {/* System Requirements */}
+                      {(form.system_requirements_minimum.processor || form.system_requirements_minimum.memory) && (
+                        <div className="glass-morphism p-6 md:p-8 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                          <h2 className="font-display text-xl font-bold mb-6 flex items-center gap-2">
+                            <HardDrive className="w-5 h-5 text-primary" />
+                            متطلبات النظام
+                          </h2>
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                              <h3 className="font-semibold text-primary mb-3">الحد الأدنى</h3>
+                              <div className="space-y-2 text-sm">
+                                {form.system_requirements_minimum.os && (
+                                  <p className="flex justify-between py-2 border-b border-border/30">
+                                    <span className="text-muted-foreground">نظام التشغيل</span>
+                                    <span>{form.system_requirements_minimum.os}</span>
+                                  </p>
+                                )}
+                                {form.system_requirements_minimum.processor && (
+                                  <p className="flex justify-between py-2 border-b border-border/30">
+                                    <span className="text-muted-foreground">المعالج</span>
+                                    <span>{form.system_requirements_minimum.processor}</span>
+                                  </p>
+                                )}
+                                {form.system_requirements_minimum.memory && (
+                                  <p className="flex justify-between py-2 border-b border-border/30">
+                                    <span className="text-muted-foreground">الذاكرة</span>
+                                    <span>{form.system_requirements_minimum.memory}</span>
+                                  </p>
+                                )}
+                                {form.system_requirements_minimum.graphics && (
+                                  <p className="flex justify-between py-2 border-b border-border/30">
+                                    <span className="text-muted-foreground">كرت الشاشة</span>
+                                    <span>{form.system_requirements_minimum.graphics}</span>
+                                  </p>
+                                )}
+                                {form.system_requirements_minimum.storage && (
+                                  <p className="flex justify-between py-2">
+                                    <span className="text-muted-foreground">التخزين</span>
+                                    <span>{form.system_requirements_minimum.storage}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {(form.system_requirements_recommended.processor || form.system_requirements_recommended.memory) && (
+                              <div className="space-y-3">
+                                <h3 className="font-semibold text-secondary mb-3">الموصى به</h3>
+                                <div className="space-y-2 text-sm">
+                                  {form.system_requirements_recommended.os && (
+                                    <p className="flex justify-between py-2 border-b border-border/30">
+                                      <span className="text-muted-foreground">نظام التشغيل</span>
+                                      <span>{form.system_requirements_recommended.os}</span>
+                                    </p>
+                                  )}
+                                  {form.system_requirements_recommended.processor && (
+                                    <p className="flex justify-between py-2 border-b border-border/30">
+                                      <span className="text-muted-foreground">المعالج</span>
+                                      <span>{form.system_requirements_recommended.processor}</span>
+                                    </p>
+                                  )}
+                                  {form.system_requirements_recommended.memory && (
+                                    <p className="flex justify-between py-2 border-b border-border/30">
+                                      <span className="text-muted-foreground">الذاكرة</span>
+                                      <span>{form.system_requirements_recommended.memory}</span>
+                                    </p>
+                                  )}
+                                  {form.system_requirements_recommended.graphics && (
+                                    <p className="flex justify-between py-2 border-b border-border/30">
+                                      <span className="text-muted-foreground">كرت الشاشة</span>
+                                      <span>{form.system_requirements_recommended.graphics}</span>
+                                    </p>
+                                  )}
+                                  {form.system_requirements_recommended.storage && (
+                                    <p className="flex justify-between py-2">
+                                      <span className="text-muted-foreground">التخزين</span>
+                                      <span>{form.system_requirements_recommended.storage}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {form.download_link && (
-                      <Button className="w-full mt-4 btn-primary" disabled>
-                        <Download className="w-4 h-4 mr-2" />
-                        تحميل اللعبة
-                      </Button>
-                    )}
+                    {/* Sidebar */}
+                    <div className="space-y-6">
+                      <div className="glass-morphism p-6 animate-slide-in-right">
+                        <h3 className="font-display font-bold mb-4 flex items-center gap-2">
+                          <Tag className="w-5 h-5 text-primary" />
+                          معلومات اللعبة
+                        </h3>
+                        <div className="space-y-4 text-sm mb-6">
+                          {form.genre && (
+                            <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in">
+                              <span className="text-muted-foreground">النوع</span>
+                              <span className="font-medium">{form.genre}</span>
+                            </div>
+                          )}
+                          {form.developer && (
+                            <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.05s' }}>
+                              <span className="text-muted-foreground">المطور</span>
+                              <span className="font-medium">{form.developer}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                            <span className="text-muted-foreground">الحجم</span>
+                            <span className="font-medium">{form.size || "غير محدد"}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.15s' }}>
+                            <span className="text-muted-foreground">الإصدار</span>
+                            <span className="version-badge">{form.version}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                            <span className="text-muted-foreground">التصنيف</span>
+                            <span className="category-badge">{categories.find(c => c.value === form.category)?.label}</span>
+                          </div>
+                          <div className="py-2 animate-fade-in" style={{ animationDelay: '0.25s' }}>
+                            <span className="text-primary font-medium flex items-center gap-2">
+                              <Check className="w-4 h-4" />
+                              Pre-Installed Game
+                            </span>
+                          </div>
+                        </div>
+
+                        {form.download_link && (
+                          <button
+                            className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-lg animate-scale-in cursor-not-allowed opacity-80"
+                            style={{ animationDelay: '0.3s' }}
+                            disabled
+                          >
+                            <Download className="w-5 h-5" />
+                            <span className="font-bold">تحميل اللعبة</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Preview Image Card */}
+                      <div className="glass-morphism p-4 animate-slide-in-right" style={{ animationDelay: '0.1s' }}>
+                        <p className="text-xs text-muted-foreground mb-3">صورة الغلاف</p>
+                        <img
+                          src={form.image || "/placeholder.svg"}
+                          alt={form.title}
+                          className="w-full h-auto rounded-lg object-cover"
+                          onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Games List */}
           <Card className="glass-morphism animate-slide-up" style={{ animationDelay: '0.2s' }}>
