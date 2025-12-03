@@ -3,8 +3,9 @@ import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Bug, Send, Link as LinkIcon } from "lucide-react";
+import { AlertTriangle, Bug, Send } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const issueTypes = [
   { value: "broken-link", label: "رابط تحميل لا يعمل" },
@@ -15,6 +16,8 @@ const issueTypes = [
 ];
 
 const ReportIssue = () => {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [gameTitle, setGameTitle] = useState("");
   const [issueType, setIssueType] = useState("");
   const [description, setDescription] = useState("");
@@ -23,21 +26,36 @@ const ReportIssue = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!gameTitle || !issueType || !description) {
+    if (!fullName || !email || !gameTitle || !issueType || !description) {
       toast.error("يرجى ملء جميع الحقول");
       return;
     }
 
     setIsSubmitting(true);
-    
-    // Simulate submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success("تم إرسال البلاغ بنجاح! شكراً لمساعدتنا في تحسين الموقع.");
-    setGameTitle("");
-    setIssueType("");
-    setDescription("");
-    setIsSubmitting(false);
+
+    try {
+      const { error } = await supabase.from("reports").insert({
+        full_name: fullName,
+        email: email,
+        game_name: gameTitle,
+        issue_type: issueType,
+        description: description,
+      });
+
+      if (error) throw error;
+
+      toast.success("تم إرسال البلاغ بنجاح! شكراً لمساعدتنا في تحسين الموقع.");
+      setFullName("");
+      setEmail("");
+      setGameTitle("");
+      setIssueType("");
+      setDescription("");
+    } catch (error) {
+      console.error("Error submitting report:", error);
+      toast.error("حدث خطأ أثناء إرسال البلاغ. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,9 +88,35 @@ const ReportIssue = () => {
           {/* Report Form */}
           <div className="glass-card p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2 text-right">
+                    الاسم الكامل *
+                  </label>
+                  <Input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="أدخل اسمك الكامل"
+                    className="text-right"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2 text-right">
+                    البريد الإلكتروني *
+                  </label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@email.com"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 text-right">
-                  اسم اللعبة
+                  اسم اللعبة *
                 </label>
                 <Input
                   value={gameTitle}
@@ -84,7 +128,7 @@ const ReportIssue = () => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 text-right">
-                  نوع المشكلة
+                  نوع المشكلة *
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {issueTypes.map((type) => (
@@ -106,7 +150,7 @@ const ReportIssue = () => {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 text-right">
-                  وصف المشكلة
+                  وصف المشكلة *
                 </label>
                 <Textarea
                   value={description}

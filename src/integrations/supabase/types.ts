@@ -41,6 +41,60 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_messages: {
+        Row: {
+          category: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          message: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          message: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          message?: string
+        }
+        Relationships: []
+      }
+      game_requests: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          game_name: string
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          game_name: string
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          game_name?: string
+          id?: string
+          notes?: string | null
+        }
+        Relationships: []
+      }
       games: {
         Row: {
           background_image: string | null
@@ -113,6 +167,36 @@ export type Database = {
           updated_at?: string
           version?: string
           views?: number
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          description: string
+          email: string
+          full_name: string
+          game_name: string
+          id: string
+          issue_type: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          email: string
+          full_name: string
+          game_name: string
+          id?: string
+          issue_type: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          email?: string
+          full_name?: string
+          game_name?: string
+          id?: string
+          issue_type?: string
         }
         Relationships: []
       }

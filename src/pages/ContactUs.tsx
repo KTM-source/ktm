@@ -3,33 +3,84 @@ import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, MessageSquare, Send, Twitter, MessageCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Mail, MessageSquare, Send, Twitter, MessageCircle, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+const contactCategories = [
+  { value: "general", label: "استفسار عام" },
+  { value: "suggestion", label: "اقتراح" },
+  { value: "partnership", label: "شراكة / تعاون" },
+  { value: "game-request", label: "طلب إضافة لعبة" },
+  { value: "other", label: "أخرى" },
+];
 
 const ContactUs = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [category, setCategory] = useState("");
+  const [gameName, setGameName] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name || !email || !message) {
-      toast.error("يرجى ملء جميع الحقول");
+    if (!name || !email || !category) {
+      toast.error("يرجى ملء جميع الحقول المطلوبة");
+      return;
+    }
+
+    if (category === "game-request" && !gameName) {
+      toast.error("يرجى إدخال اسم اللعبة المطلوبة");
+      return;
+    }
+
+    if (category !== "game-request" && !message) {
+      toast.error("يرجى كتابة رسالتك");
       return;
     }
 
     setIsSubmitting(true);
-    
-    // Simulate submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success("تم إرسال رسالتك بنجاح! سنرد عليك قريباً.");
-    setName("");
-    setEmail("");
-    setMessage("");
-    setIsSubmitting(false);
+
+    try {
+      if (category === "game-request") {
+        // Insert into game_requests table
+        const { error } = await supabase.from("game_requests").insert({
+          full_name: name,
+          email: email,
+          game_name: gameName,
+          notes: message || null,
+        });
+
+        if (error) throw error;
+        toast.success("تم إرسال طلب اللعبة بنجاح! سننظر فيه قريباً.");
+      } else {
+        // Insert into contact_messages table
+        const { error } = await supabase.from("contact_messages").insert({
+          full_name: name,
+          email: email,
+          category: category,
+          message: message,
+        });
+
+        if (error) throw error;
+        toast.success("تم إرسال رسالتك بنجاح! سنرد عليك قريباً.");
+      }
+
+      // Reset form
+      setName("");
+      setEmail("");
+      setCategory("");
+      setGameName("");
+      setMessage("");
+    } catch (error) {
+      console.error("Error submitting:", error);
+      toast.error("حدث خطأ أثناء الإرسال. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -58,18 +109,18 @@ const ContactUs = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 text-right">
-                  الاسم
+                  الاسم الكامل *
                 </label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="أدخل اسمك"
+                  placeholder="أدخل اسمك الكامل"
                   className="text-right"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 text-right">
-                  البريد الإلكتروني
+                  البريد الإلكتروني *
                 </label>
                 <Input
                   type="email"
@@ -81,12 +132,46 @@ const ContactUs = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2 text-right">
-                  الرسالة
+                  نوع الرسالة *
+                </label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="اختر نوع الرسالة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contactCategories.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Game Name Field - Only show when game-request is selected */}
+              {category === "game-request" && (
+                <div className="animate-fade-in">
+                  <label className="block text-sm font-medium text-foreground mb-2 text-right">
+                    <Gamepad2 className="w-4 h-4 inline ml-1" />
+                    اسم اللعبة المطلوبة *
+                  </label>
+                  <Input
+                    value={gameName}
+                    onChange={(e) => setGameName(e.target.value)}
+                    placeholder="أدخل اسم اللعبة"
+                    className="text-right"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2 text-right">
+                  {category === "game-request" ? "ملاحظات إضافية (اختياري)" : "الرسالة *"}
                 </label>
                 <Textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="اكتب رسالتك هنا..."
+                  placeholder={category === "game-request" ? "أي تفاصيل إضافية عن اللعبة..." : "اكتب رسالتك هنا..."}
                   rows={5}
                   className="text-right"
                 />

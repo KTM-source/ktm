@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { 
   Lock, Plus, Trash2, Edit, LogOut, Gamepad2, Search, 
-  ChevronLeft, ChevronRight, Eye, BarChart3, Calendar,
-  Download, Star, ExternalLink, X, User, Check, Tag, HardDrive
+  ChevronLeft, ChevronRight, Eye, BarChart3,
+  Star, X, Mail, Bug, MessageSquare
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ImageUpload } from "@/components/admin/ImageUpload";
@@ -75,18 +75,8 @@ const initialForm: GameForm = {
   },
 };
 
-const categories = [
-  { value: "action", label: "Action" },
-  { value: "adventure", label: "Adventure" },
-  { value: "rpg", label: "RPG" },
-  { value: "sports", label: "Sports" },
-  { value: "racing", label: "Racing" },
-  { value: "simulation", label: "Simulation" },
-  { value: "strategy", label: "Strategy" },
-  { value: "horror", label: "Horror" },
-];
-
 const GAMES_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 10;
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -99,6 +89,16 @@ export default function Admin() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState("games");
+  
+  // Data for other tabs
+  const [reports, setReports] = useState<any[]>([]);
+  const [contactMessages, setContactMessages] = useState<any[]>([]);
+  const [gameRequests, setGameRequests] = useState<any[]>([]);
+  const [reportsPage, setReportsPage] = useState(1);
+  const [contactPage, setContactPage] = useState(1);
+  const [requestsPage, setRequestsPage] = useState(1);
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -112,6 +112,9 @@ export default function Admin() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchGames();
+      fetchReports();
+      fetchContactMessages();
+      fetchGameRequests();
     }
   }, [isAuthenticated]);
 
@@ -126,6 +129,33 @@ export default function Admin() {
       return;
     }
     setGames(data || []);
+  };
+
+  const fetchReports = async () => {
+    const { data, error } = await supabase
+      .from("reports")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    if (!error) setReports(data || []);
+  };
+
+  const fetchContactMessages = async () => {
+    const { data, error } = await supabase
+      .from("contact_messages")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    if (!error) setContactMessages(data || []);
+  };
+
+  const fetchGameRequests = async () => {
+    const { data, error } = await supabase
+      .from("game_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    if (!error) setGameRequests(data || []);
   };
 
   // Filter and paginate games
@@ -143,6 +173,11 @@ export default function Admin() {
     currentPage * GAMES_PER_PAGE
   );
 
+  // Paginate other data
+  const paginatedReports = reports.slice((reportsPage - 1) * ITEMS_PER_PAGE, reportsPage * ITEMS_PER_PAGE);
+  const paginatedContactMessages = contactMessages.slice((contactPage - 1) * ITEMS_PER_PAGE, contactPage * ITEMS_PER_PAGE);
+  const paginatedGameRequests = gameRequests.slice((requestsPage - 1) * ITEMS_PER_PAGE, requestsPage * ITEMS_PER_PAGE);
+
   // Statistics
   const stats = useMemo(() => ({
     totalGames: games.length,
@@ -153,8 +188,11 @@ export default function Admin() {
     categoryCounts: games.reduce((acc, g) => {
       acc[g.category] = (acc[g.category] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>)
-  }), [games]);
+    }, {} as Record<string, number>),
+    totalReports: reports.length,
+    totalMessages: contactMessages.length,
+    totalRequests: gameRequests.length,
+  }), [games, reports, contactMessages, gameRequests]);
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -200,7 +238,6 @@ export default function Admin() {
     setIsLoading(true);
 
     try {
-      // Extract first genre as primary category for backwards compatibility
       const genres = form.genre.split(",").map(g => g.trim().toLowerCase()).filter(g => g);
       const primaryCategory = genres[0] || "action";
       
@@ -266,6 +303,7 @@ export default function Admin() {
       system_requirements_minimum: game.system_requirements_minimum || initialForm.system_requirements_minimum,
       system_requirements_recommended: game.system_requirements_recommended || initialForm.system_requirements_recommended,
     });
+    setActiveTab("games");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -291,6 +329,43 @@ export default function Admin() {
     } catch (error) {
       toast.error("حدث خطأ");
     }
+  };
+
+  const handleDeleteReport = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا البلاغ؟")) return;
+    const { error } = await supabase.from("reports").delete().eq("id", id);
+    if (!error) {
+      toast.success("تم حذف البلاغ");
+      fetchReports();
+    }
+  };
+
+  const handleDeleteContact = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذه الرسالة؟")) return;
+    const { error } = await supabase.from("contact_messages").delete().eq("id", id);
+    if (!error) {
+      toast.success("تم حذف الرسالة");
+      fetchContactMessages();
+    }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return;
+    const { error } = await supabase.from("game_requests").delete().eq("id", id);
+    if (!error) {
+      toast.success("تم حذف الطلب");
+      fetchGameRequests();
+    }
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString("en-GB", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   if (!isAuthenticated) {
@@ -356,712 +431,655 @@ export default function Admin() {
 
       <main className="container mx-auto px-4 py-8">
         {/* Stats Section */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
           {[
-            { icon: Gamepad2, label: "إجمالي الألعاب", value: stats.totalGames, color: "primary" },
-            { icon: Eye, label: "إجمالي المشاهدات", value: stats.totalViews.toLocaleString(), color: "secondary" },
+            { icon: Gamepad2, label: "الألعاب", value: stats.totalGames, color: "primary" },
+            { icon: Eye, label: "المشاهدات", value: stats.totalViews.toLocaleString(), color: "secondary" },
             { icon: Star, label: "متوسط التقييم", value: stats.avgRating, color: "neon-green" },
             { icon: BarChart3, label: "التصنيفات", value: Object.keys(stats.categoryCounts).length, color: "neon-purple" },
+            { icon: Bug, label: "البلاغات", value: stats.totalReports, color: "destructive" },
+            { icon: Mail, label: "الرسائل", value: stats.totalMessages, color: "neon-cyan" },
+            { icon: MessageSquare, label: "طلبات الألعاب", value: stats.totalRequests, color: "primary" },
           ].map((stat, index) => (
             <div 
               key={stat.label}
               className="stat-card animate-scale-in"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <stat.icon className={`w-8 h-8 mx-auto mb-2 text-${stat.color} animate-glow-pulse`} />
-              <div className="text-2xl font-bold gradient-text">{stat.value}</div>
-              <div className="text-sm text-muted-foreground">{stat.label}</div>
+              <stat.icon className={`w-6 h-6 mx-auto mb-2 text-${stat.color} animate-glow-pulse`} />
+              <div className="text-xl font-bold gradient-text">{stat.value}</div>
+              <div className="text-xs text-muted-foreground">{stat.label}</div>
             </div>
           ))}
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Add/Edit Game Form */}
-          <div className="space-y-6">
-            <Card className="glass-morphism animate-slide-up">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {editingId ? <Edit className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
-                  {editingId ? "تعديل لعبة" : "إضافة لعبة جديدة"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Basic Info */}
-                  <div className="space-y-4 animate-fade-in">
-                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                      معلومات أساسية
-                    </h3>
-                    
-                    <div>
-                      <Label htmlFor="title">اسم اللعبة *</Label>
-                      <Input
-                        id="title"
-                        value={form.title}
-                        onChange={(e) => setForm({ ...form, title: e.target.value })}
-                        className="glass-card border-border/50"
-                        required
-                      />
-                      {form.title && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          الرابط: /{generateSlug(form.title)}
-                        </p>
-                      )}
-                    </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="glass-card p-1 w-full justify-start overflow-x-auto">
+            <TabsTrigger value="games" className="flex items-center gap-2">
+              <Gamepad2 className="w-4 h-4" />
+              إدارة الألعاب
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <Bug className="w-4 h-4" />
+              البلاغات ({stats.totalReports})
+            </TabsTrigger>
+            <TabsTrigger value="contact" className="flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              التواصل ({stats.totalMessages})
+            </TabsTrigger>
+            <TabsTrigger value="requests" className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              طلبات الألعاب ({stats.totalRequests})
+            </TabsTrigger>
+          </TabsList>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="developer">المطور</Label>
-                        <Input
-                          id="developer"
-                          value={form.developer}
-                          onChange={(e) => setForm({ ...form, developer: e.target.value })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="genre">التصنيف / النوع (Genre) *</Label>
-                        <Input
-                          id="genre"
-                          value={form.genre}
-                          onChange={(e) => setForm({ ...form, genre: e.target.value })}
-                          placeholder="action, adventure, rpg (مفصولة بفاصلة)"
-                          className="glass-card border-border/50"
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          يمكنك إضافة أكثر من تصنيف مفصولين بفاصلة
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="size">الحجم *</Label>
-                        <Input
-                          id="size"
-                          value={form.size}
-                          onChange={(e) => setForm({ ...form, size: e.target.value })}
-                          placeholder="50 GB"
-                          className="glass-card border-border/50"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="version">الإصدار</Label>
-                        <Input
-                          id="version"
-                          value={form.version}
-                          onChange={(e) => setForm({ ...form, version: e.target.value })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="rating">التقييم (0-5)</Label>
-                      <Input
-                        id="rating"
-                        type="number"
-                        min="0"
-                        max="5"
-                        step="0.1"
-                        value={form.rating}
-                        onChange={(e) => setForm({ ...form, rating: e.target.value })}
-                        className="glass-card border-border/50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Images */}
-                  <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
-                      الصور
-                    </h3>
-                    
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <ImageUpload
-                        value={form.image}
-                        onChange={(url) => setForm(prev => ({ ...prev, image: url }))}
-                        label="الصورة الصغيرة (Portrait) *"
-                        aspectRatio="portrait"
-                      />
-                      <ImageUpload
-                        value={form.background_image}
-                        onChange={(url) => setForm(prev => ({ ...prev, background_image: url }))}
-                        label="الخلفية الكبيرة (Landscape)"
-                        aspectRatio="landscape"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-neon-green rounded-full animate-pulse" />
-                      الوصف والميزات
-                    </h3>
-                    
-                    <div>
-                      <Label>الوصف الكامل *</Label>
-                      <RichTextEditor
-                        value={form.description}
-                        onChange={(val) => setForm({ ...form, description: val })}
-                        rows={8}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="features">الميزات (كل ميزة في سطر)</Label>
-                      <Textarea
-                        id="features"
-                        value={form.features}
-                        onChange={(e) => setForm({ ...form, features: e.target.value })}
-                        rows={4}
-                        placeholder="ميزة 1&#10;ميزة 2&#10;ميزة 3"
-                        className="glass-card border-border/50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* System Requirements */}
-                  <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.3s' }}>
-                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-neon-purple rounded-full animate-pulse" />
-                      متطلبات النظام الدنيا
-                    </h3>
-                    
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label>نظام التشغيل</Label>
-                        <Input
-                          value={form.system_requirements_minimum.os}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_minimum: { ...form.system_requirements_minimum, os: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>المعالج</Label>
-                        <Input
-                          value={form.system_requirements_minimum.processor}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_minimum: { ...form.system_requirements_minimum, processor: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>الذاكرة</Label>
-                        <Input
-                          value={form.system_requirements_minimum.memory}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_minimum: { ...form.system_requirements_minimum, memory: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>كرت الشاشة</Label>
-                        <Input
-                          value={form.system_requirements_minimum.graphics}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_minimum: { ...form.system_requirements_minimum, graphics: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>التخزين</Label>
-                        <Input
-                          value={form.system_requirements_minimum.storage}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_minimum: { ...form.system_requirements_minimum, storage: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-neon-cyan rounded-full animate-pulse" />
-                      متطلبات النظام الموصى بها
-                    </h3>
-                    
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label>نظام التشغيل</Label>
-                        <Input
-                          value={form.system_requirements_recommended.os}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_recommended: { ...form.system_requirements_recommended, os: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>المعالج</Label>
-                        <Input
-                          value={form.system_requirements_recommended.processor}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_recommended: { ...form.system_requirements_recommended, processor: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>الذاكرة</Label>
-                        <Input
-                          value={form.system_requirements_recommended.memory}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_recommended: { ...form.system_requirements_recommended, memory: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>كرت الشاشة</Label>
-                        <Input
-                          value={form.system_requirements_recommended.graphics}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_recommended: { ...form.system_requirements_recommended, graphics: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                      <div>
-                        <Label>التخزين</Label>
-                        <Input
-                          value={form.system_requirements_recommended.storage}
-                          onChange={(e) => setForm({
-                            ...form,
-                            system_requirements_recommended: { ...form.system_requirements_recommended, storage: e.target.value }
-                          })}
-                          className="glass-card border-border/50"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Download Link */}
-                  <div className="space-y-4 animate-fade-in" style={{ animationDelay: '0.5s' }}>
-                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                      رابط التحميل
-                    </h3>
-                    <div>
-                      <Label htmlFor="download_link">رابط التحميل</Label>
-                      <Input
-                        id="download_link"
-                        value={form.download_link}
-                        onChange={(e) => setForm({ ...form, download_link: e.target.value })}
-                        dir="ltr"
-                        placeholder="https://gofile.io/..."
-                        className="glass-card border-border/50"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      className="glass-card border-border/50"
-                      onClick={() => setShowPreview(!showPreview)}
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      {showPreview ? "إخفاء المعاينة" : "معاينة"}
-                    </Button>
-                    <Button type="submit" className="flex-1 btn-primary" disabled={isLoading}>
-                      {isLoading ? "جاري الحفظ..." : editingId ? "تحديث اللعبة" : "إضافة اللعبة"}
-                    </Button>
-                    {editingId && (
-                      <Button type="button" variant="outline" onClick={() => { setEditingId(null); setForm(initialForm); setShowPreview(false); }} className="glass-card">
-                        إلغاء
-                      </Button>
-                    )}
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Full Screen Preview Modal */}
-          <Dialog open={showPreview && !!form.title} onOpenChange={setShowPreview}>
-            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 overflow-hidden glass-morphism border-border/30">
-              <DialogTitle className="sr-only">معاينة صفحة اللعبة</DialogTitle>
-              
-              {/* Close Button */}
-              <button
-                onClick={() => setShowPreview(false)}
-                className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full glass-card flex items-center justify-center hover:bg-destructive/20 hover:border-destructive/50 transition-all duration-300 group"
-              >
-                <X className="w-5 h-5 text-foreground group-hover:text-destructive transition-colors" />
-              </button>
-
-              <div className="h-full overflow-y-auto">
-                {/* Hero Section */}
-                <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
-                  <img
-                    src={form.background_image || form.image || "/placeholder.svg"}
-                    alt={form.title}
-                    className="w-full h-full object-cover animate-blur-in"
-                    onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/30" />
-                  
-                  {/* Animated glow effect */}
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/10 rounded-full blur-[100px] animate-pulse-glow" />
-                </div>
-
-                <div className="container mx-auto px-6 -mt-32 relative z-10 pb-8">
-                  {/* Breadcrumb */}
-                  <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-6 animate-fade-in">
-                    <span className="hover:text-primary transition-colors duration-300">الرئيسية</span>
-                    <ChevronLeft className="w-4 h-4" />
-                    <span className="hover:text-primary transition-colors duration-300 capitalize">
-                      {categories.find(c => c.value === form.category)?.label || form.category}
-                    </span>
-                    <ChevronLeft className="w-4 h-4" />
-                    <span className="text-foreground">{form.title}</span>
-                  </nav>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Main Content */}
-                    <div className="lg:col-span-2 space-y-6">
-                      <div className="glass-morphism p-6 md:p-8 animate-slide-up">
-                        <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-4 gradient-text">
-                          {form.title} Free Download
-                        </h1>
-
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
-                          {form.developer && (
-                            <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-full animate-scale-in">
-                              <User className="w-4 h-4 text-primary" />
-                              <span>{form.developer}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-full animate-scale-in" style={{ animationDelay: '0.1s' }}>
-                            <Eye className="w-4 h-4 text-primary" />
-                            <span>0 مشاهدة</span>
-                          </div>
-                          {form.rating && (
-                            <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-full animate-scale-in" style={{ animationDelay: '0.2s' }}>
-                              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                              <span>{form.rating}</span>
-                            </div>
+          {/* Games Tab */}
+          <TabsContent value="games" className="space-y-6">
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Add/Edit Game Form */}
+              <div className="space-y-6">
+                <Card className="glass-morphism animate-slide-up">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {editingId ? <Edit className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
+                      {editingId ? "تعديل لعبة" : "إضافة لعبة جديدة"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                      {/* Basic Info */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                          معلومات أساسية
+                        </h3>
+                        
+                        <div>
+                          <Label htmlFor="title">اسم اللعبة *</Label>
+                          <Input
+                            id="title"
+                            value={form.title}
+                            onChange={(e) => setForm({ ...form, title: e.target.value })}
+                            className="glass-card border-border/50"
+                            required
+                          />
+                          {form.title && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              الرابط: /{generateSlug(form.title)}
+                            </p>
                           )}
                         </div>
 
-                        <div className="text-muted-foreground leading-relaxed mb-8 text-base">
-                          {form.description ? parseRichText(form.description) : "لا يوجد وصف متاح حالياً"}
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="developer">المطور</Label>
+                            <Input
+                              id="developer"
+                              value={form.developer}
+                              onChange={(e) => setForm({ ...form, developer: e.target.value })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="genre">التصنيف / النوع (Genre) *</Label>
+                            <Input
+                              id="genre"
+                              value={form.genre}
+                              onChange={(e) => setForm({ ...form, genre: e.target.value })}
+                              placeholder="action, adventure, rpg (مفصولة بفاصلة)"
+                              className="glass-card border-border/50"
+                              required
+                            />
+                          </div>
                         </div>
 
-                        {form.features && form.features.trim() && (
-                          <div className="space-y-3">
-                            <h3 className="font-display font-bold text-lg mb-4">مميزات اللعبة</h3>
-                            <ul className="space-y-3">
-                              {form.features.split("\n").filter(f => f.trim()).map((feature, index) => (
-                                <li 
-                                  key={index} 
-                                  className="flex items-start gap-3 text-muted-foreground animate-slide-up"
-                                  style={{ animationDelay: `${index * 0.05}s` }}
-                                >
-                                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                    <Check className="w-3 h-3 text-primary" />
-                                  </div>
-                                  <span>{feature}</span>
-                                </li>
-                              ))}
-                            </ul>
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="size">الحجم *</Label>
+                            <Input
+                              id="size"
+                              value={form.size}
+                              onChange={(e) => setForm({ ...form, size: e.target.value })}
+                              placeholder="50 GB"
+                              className="glass-card border-border/50"
+                              required
+                            />
                           </div>
-                        )}
+                          <div>
+                            <Label htmlFor="version">الإصدار</Label>
+                            <Input
+                              id="version"
+                              value={form.version}
+                              onChange={(e) => setForm({ ...form, version: e.target.value })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="rating">التقييم (0-5)</Label>
+                          <Input
+                            id="rating"
+                            type="number"
+                            min="0"
+                            max="5"
+                            step="0.1"
+                            value={form.rating}
+                            onChange={(e) => setForm({ ...form, rating: e.target.value })}
+                            className="glass-card border-border/50"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Images */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
+                          الصور
+                        </h3>
+                        
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <ImageUpload
+                            value={form.image}
+                            onChange={(url) => setForm(prev => ({ ...prev, image: url }))}
+                            label="الصورة الصغيرة (Portrait) *"
+                            aspectRatio="portrait"
+                          />
+                          <ImageUpload
+                            value={form.background_image}
+                            onChange={(url) => setForm(prev => ({ ...prev, background_image: url }))}
+                            label="الخلفية الكبيرة (Landscape)"
+                            aspectRatio="landscape"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-neon-green rounded-full animate-pulse" />
+                          الوصف والميزات
+                        </h3>
+                        
+                        <div>
+                          <Label>الوصف الكامل *</Label>
+                          <RichTextEditor
+                            value={form.description}
+                            onChange={(val) => setForm({ ...form, description: val })}
+                            rows={8}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="features">الميزات (كل ميزة في سطر)</Label>
+                          <Textarea
+                            id="features"
+                            value={form.features}
+                            onChange={(e) => setForm({ ...form, features: e.target.value })}
+                            rows={4}
+                            placeholder="ميزة 1&#10;ميزة 2&#10;ميزة 3"
+                            className="glass-card border-border/50"
+                          />
+                        </div>
                       </div>
 
                       {/* System Requirements */}
-                      {(form.system_requirements_minimum.processor || form.system_requirements_minimum.memory) && (
-                        <div className="glass-morphism p-6 md:p-8 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-                          <h2 className="font-display text-xl font-bold mb-6 flex items-center gap-2">
-                            <HardDrive className="w-5 h-5 text-primary" />
-                            متطلبات النظام
-                          </h2>
-                          <div className="grid md:grid-cols-2 gap-6">
-                            <div className="space-y-3">
-                              <h3 className="font-semibold text-primary mb-3">الحد الأدنى</h3>
-                              <div className="space-y-2 text-sm">
-                                {form.system_requirements_minimum.os && (
-                                  <p className="flex justify-between py-2 border-b border-border/30">
-                                    <span className="text-muted-foreground">نظام التشغيل</span>
-                                    <span>{form.system_requirements_minimum.os}</span>
-                                  </p>
-                                )}
-                                {form.system_requirements_minimum.processor && (
-                                  <p className="flex justify-between py-2 border-b border-border/30">
-                                    <span className="text-muted-foreground">المعالج</span>
-                                    <span>{form.system_requirements_minimum.processor}</span>
-                                  </p>
-                                )}
-                                {form.system_requirements_minimum.memory && (
-                                  <p className="flex justify-between py-2 border-b border-border/30">
-                                    <span className="text-muted-foreground">الذاكرة</span>
-                                    <span>{form.system_requirements_minimum.memory}</span>
-                                  </p>
-                                )}
-                                {form.system_requirements_minimum.graphics && (
-                                  <p className="flex justify-between py-2 border-b border-border/30">
-                                    <span className="text-muted-foreground">كرت الشاشة</span>
-                                    <span>{form.system_requirements_minimum.graphics}</span>
-                                  </p>
-                                )}
-                                {form.system_requirements_minimum.storage && (
-                                  <p className="flex justify-between py-2">
-                                    <span className="text-muted-foreground">التخزين</span>
-                                    <span>{form.system_requirements_minimum.storage}</span>
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {(form.system_requirements_recommended.processor || form.system_requirements_recommended.memory) && (
-                              <div className="space-y-3">
-                                <h3 className="font-semibold text-secondary mb-3">الموصى به</h3>
-                                <div className="space-y-2 text-sm">
-                                  {form.system_requirements_recommended.os && (
-                                    <p className="flex justify-between py-2 border-b border-border/30">
-                                      <span className="text-muted-foreground">نظام التشغيل</span>
-                                      <span>{form.system_requirements_recommended.os}</span>
-                                    </p>
-                                  )}
-                                  {form.system_requirements_recommended.processor && (
-                                    <p className="flex justify-between py-2 border-b border-border/30">
-                                      <span className="text-muted-foreground">المعالج</span>
-                                      <span>{form.system_requirements_recommended.processor}</span>
-                                    </p>
-                                  )}
-                                  {form.system_requirements_recommended.memory && (
-                                    <p className="flex justify-between py-2 border-b border-border/30">
-                                      <span className="text-muted-foreground">الذاكرة</span>
-                                      <span>{form.system_requirements_recommended.memory}</span>
-                                    </p>
-                                  )}
-                                  {form.system_requirements_recommended.graphics && (
-                                    <p className="flex justify-between py-2 border-b border-border/30">
-                                      <span className="text-muted-foreground">كرت الشاشة</span>
-                                      <span>{form.system_requirements_recommended.graphics}</span>
-                                    </p>
-                                  )}
-                                  {form.system_requirements_recommended.storage && (
-                                    <p className="flex justify-between py-2">
-                                      <span className="text-muted-foreground">التخزين</span>
-                                      <span>{form.system_requirements_recommended.storage}</span>
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Sidebar */}
-                    <div className="space-y-6">
-                      <div className="glass-morphism p-6 animate-slide-in-right">
-                        <h3 className="font-display font-bold mb-4 flex items-center gap-2">
-                          <Tag className="w-5 h-5 text-primary" />
-                          معلومات اللعبة
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-neon-purple rounded-full animate-pulse" />
+                          متطلبات النظام الدنيا
                         </h3>
-                        <div className="space-y-4 text-sm mb-6">
-                          {form.genre && (
-                            <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in">
-                              <span className="text-muted-foreground">النوع</span>
-                              <span className="font-medium">{form.genre}</span>
-                            </div>
-                          )}
-                          {form.developer && (
-                            <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.05s' }}>
-                              <span className="text-muted-foreground">المطور</span>
-                              <span className="font-medium">{form.developer}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                            <span className="text-muted-foreground">الحجم</span>
-                            <span className="font-medium">{form.size || "غير محدد"}</span>
+                        
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <Label>نظام التشغيل</Label>
+                            <Input
+                              value={form.system_requirements_minimum.os}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_minimum: { ...form.system_requirements_minimum, os: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
                           </div>
-                          <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.15s' }}>
-                            <span className="text-muted-foreground">الإصدار</span>
-                            <span className="version-badge">{form.version}</span>
+                          <div>
+                            <Label>المعالج</Label>
+                            <Input
+                              value={form.system_requirements_minimum.processor}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_minimum: { ...form.system_requirements_minimum, processor: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
                           </div>
-                          <div className="flex justify-between py-2 border-b border-border/30 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-                            <span className="text-muted-foreground">التصنيف</span>
-                            <span className="category-badge">{form.genre || "غير محدد"}</span>
+                          <div>
+                            <Label>الذاكرة</Label>
+                            <Input
+                              value={form.system_requirements_minimum.memory}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_minimum: { ...form.system_requirements_minimum, memory: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
                           </div>
-                          <div className="py-2 animate-fade-in" style={{ animationDelay: '0.25s' }}>
-                            <span className="text-primary font-medium flex items-center gap-2">
-                              <Check className="w-4 h-4" />
-                              Pre-Installed Game
-                            </span>
+                          <div>
+                            <Label>كرت الشاشة</Label>
+                            <Input
+                              value={form.system_requirements_minimum.graphics}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_minimum: { ...form.system_requirements_minimum, graphics: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                          <div>
+                            <Label>التخزين</Label>
+                            <Input
+                              value={form.system_requirements_minimum.storage}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_minimum: { ...form.system_requirements_minimum, storage: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
                           </div>
                         </div>
+                      </div>
 
-                        {form.download_link && (
-                          <button
-                            className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-lg animate-scale-in cursor-not-allowed opacity-80"
-                            style={{ animationDelay: '0.3s' }}
-                            disabled
-                          >
-                            <Download className="w-5 h-5" />
-                            <span className="font-bold">تحميل اللعبة</span>
-                          </button>
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-neon-cyan rounded-full animate-pulse" />
+                          متطلبات النظام الموصى بها
+                        </h3>
+                        
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <Label>نظام التشغيل</Label>
+                            <Input
+                              value={form.system_requirements_recommended.os}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_recommended: { ...form.system_requirements_recommended, os: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                          <div>
+                            <Label>المعالج</Label>
+                            <Input
+                              value={form.system_requirements_recommended.processor}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_recommended: { ...form.system_requirements_recommended, processor: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                          <div>
+                            <Label>الذاكرة</Label>
+                            <Input
+                              value={form.system_requirements_recommended.memory}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_recommended: { ...form.system_requirements_recommended, memory: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                          <div>
+                            <Label>كرت الشاشة</Label>
+                            <Input
+                              value={form.system_requirements_recommended.graphics}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_recommended: { ...form.system_requirements_recommended, graphics: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                          <div>
+                            <Label>التخزين</Label>
+                            <Input
+                              value={form.system_requirements_recommended.storage}
+                              onChange={(e) => setForm({
+                                ...form,
+                                system_requirements_recommended: { ...form.system_requirements_recommended, storage: e.target.value }
+                              })}
+                              className="glass-card border-border/50"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Download Link */}
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                          رابط التحميل
+                        </h3>
+                        <div>
+                          <Label htmlFor="download_link">رابط التحميل</Label>
+                          <Input
+                            id="download_link"
+                            value={form.download_link}
+                            onChange={(e) => setForm({ ...form, download_link: e.target.value })}
+                            dir="ltr"
+                            placeholder="https://gofile.io/..."
+                            className="glass-card border-border/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-4">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="glass-card border-border/50"
+                          onClick={() => setShowPreview(!showPreview)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          {showPreview ? "إخفاء المعاينة" : "معاينة"}
+                        </Button>
+                        <Button type="submit" className="flex-1 btn-primary" disabled={isLoading}>
+                          {isLoading ? "جاري الحفظ..." : editingId ? "تحديث اللعبة" : "إضافة اللعبة"}
+                        </Button>
+                        {editingId && (
+                          <Button type="button" variant="outline" onClick={() => { setEditingId(null); setForm(initialForm); setShowPreview(false); }} className="glass-card">
+                            إلغاء
+                          </Button>
                         )}
                       </div>
-                    </div>
-                  </div>
-                </div>
+                    </form>
+                  </CardContent>
+                </Card>
               </div>
-            </DialogContent>
-          </Dialog>
 
-          {/* Games List */}
-          <Card className="glass-morphism animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>الألعاب المضافة ({games.length})</span>
-              </CardTitle>
-              
-              {/* Search */}
-              <div className="relative mt-4">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="بحث بالاسم، التصنيف، أو المطور..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="pr-10 glass-card border-border/50"
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                {filteredGames.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8 animate-fade-in">
-                    {searchQuery ? "لا توجد نتائج" : "لا توجد ألعاب مضافة بعد"}
-                  </p>
-                ) : (
-                  paginatedGames.map((game, index) => (
-                    <div 
-                      key={game.id} 
-                      className="flex items-center gap-3 p-3 glass-card rounded-xl hover:border-primary/30 transition-all duration-300 animate-scale-in group"
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      <img
-                        src={game.image}
-                        alt={game.title}
-                        className="w-14 h-18 object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
-                        onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium truncate group-hover:text-primary transition-colors">{game.title}</h4>
-                        <p className="text-sm text-muted-foreground">{game.category} • {game.size}</p>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          <span className="flex items-center gap-1">
-                            <Eye className="w-3 h-3" />
-                            {game.views?.toLocaleString() || 0}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(game.updated_at || game.created_at).toLocaleDateString('en-GB')}
-                          </span>
+              {/* Preview & Games List */}
+              <div className="space-y-6">
+                {/* Preview */}
+                {showPreview && form.title && (
+                  <Dialog open={showPreview} onOpenChange={setShowPreview}>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto glass-morphism">
+                      <DialogTitle className="sr-only">معاينة اللعبة</DialogTitle>
+                      <div className="relative">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-0 left-0 z-10"
+                          onClick={() => setShowPreview(false)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                        
+                        {/* Preview Content */}
+                        <div className="space-y-6 pt-8">
+                          {form.background_image && (
+                            <div className="relative h-48 rounded-xl overflow-hidden">
+                              <img src={form.background_image} alt="" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
+                            </div>
+                          )}
+                          
+                          <div className="flex gap-6">
+                            {form.image && (
+                              <img src={form.image} alt="" className="w-32 h-44 object-cover rounded-xl" />
+                            )}
+                            <div className="flex-1">
+                              <h2 className="text-2xl font-bold">{form.title}</h2>
+                              <p className="text-muted-foreground">{form.developer}</p>
+                              <div className="flex gap-2 mt-2">
+                                <span className="px-2 py-1 rounded bg-primary/20 text-primary text-sm">{form.genre}</span>
+                                <span className="px-2 py-1 rounded bg-muted text-sm">{form.size}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h3 className="font-semibold mb-2">الوصف</h3>
+                            <div 
+                              className="text-muted-foreground prose prose-invert max-w-none"
+                              dangerouslySetInnerHTML={{ __html: parseRichText(form.description) }}
+                            />
+                          </div>
+
+                          {form.features && (
+                            <div>
+                              <h3 className="font-semibold mb-2">الميزات</h3>
+                              <ul className="list-disc list-inside text-muted-foreground">
+                                {form.features.split("\n").filter(f => f.trim()).map((f, i) => (
+                                  <li key={i}>{f}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={() => window.open(`/${game.slug}`, '_blank')}
-                          className="hover:bg-primary/10"
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* Games List */}
+                <Card className="glass-morphism">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>الألعاب المضافة ({filteredGames.length})</span>
+                    </CardTitle>
+                    <div className="relative mt-4">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="بحث..."
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                        className="pl-10 glass-card border-border/50"
+                      />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {paginatedGames.map((game) => (
+                        <div key={game.id} className="flex items-center gap-3 p-3 rounded-xl glass-card hover:border-primary/30 transition-all group">
+                          <img src={game.image} alt={game.title} className="w-12 h-16 object-cover rounded-lg" />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium truncate">{game.title}</h4>
+                            <p className="text-xs text-muted-foreground">{game.genre || game.category} • {game.size}</p>
+                          </div>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button size="icon" variant="ghost" onClick={() => handleEdit(game)}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDelete(game.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-border/50">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
                         >
-                          <ExternalLink className="w-4 h-4" />
+                          <ChevronRight className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleEdit(game)} className="hover:bg-primary/10">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleDelete(game.id)}>
-                          <Trash2 className="w-4 h-4" />
+                        <span className="text-sm">{currentPage} / {totalPages}</span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
                         </Button>
                       </div>
-                    </div>
-                  ))
-                )}
+                    )}
+                  </CardContent>
+                </Card>
               </div>
+            </div>
+          </TabsContent>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-border/50">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="glass-card"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={currentPage === pageNum ? "btn-primary" : "glass-card"}
-                        >
-                          {pageNum}
+          {/* Reports Tab */}
+          <TabsContent value="reports">
+            <Card className="glass-morphism">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bug className="w-5 h-5 text-destructive" />
+                  البلاغات الواردة ({reports.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reports.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">لا توجد بلاغات حالياً</p>
+                ) : (
+                  <div className="space-y-4">
+                    {paginatedReports.map((report) => (
+                      <div key={report.id} className="p-4 rounded-xl glass-card space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-semibold">{report.game_name}</h4>
+                            <p className="text-sm text-muted-foreground">{report.full_name} • {report.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 rounded bg-destructive/20 text-destructive text-xs">
+                              {report.issue_type}
+                            </span>
+                            <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDeleteReport(report.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{report.description}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(report.created_at)}</p>
+                      </div>
+                    ))}
+                    
+                    {Math.ceil(reports.length / ITEMS_PER_PAGE) > 1 && (
+                      <div className="flex items-center justify-center gap-2 pt-4">
+                        <Button variant="outline" size="icon" onClick={() => setReportsPage(p => Math.max(1, p - 1))} disabled={reportsPage === 1}>
+                          <ChevronRight className="w-4 h-4" />
                         </Button>
-                      );
-                    })}
+                        <span className="text-sm">{reportsPage} / {Math.ceil(reports.length / ITEMS_PER_PAGE)}</span>
+                        <Button variant="outline" size="icon" onClick={() => setReportsPage(p => Math.min(Math.ceil(reports.length / ITEMS_PER_PAGE), p + 1))} disabled={reportsPage === Math.ceil(reports.length / ITEMS_PER_PAGE)}>
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="glass-card"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Contact Messages Tab */}
+          <TabsContent value="contact">
+            <Card className="glass-morphism">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-primary" />
+                  رسائل التواصل ({contactMessages.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {contactMessages.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">لا توجد رسائل حالياً</p>
+                ) : (
+                  <div className="space-y-4">
+                    {paginatedContactMessages.map((msg) => (
+                      <div key={msg.id} className="p-4 rounded-xl glass-card space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-semibold">{msg.full_name}</h4>
+                            <p className="text-sm text-muted-foreground">{msg.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 rounded bg-primary/20 text-primary text-xs">
+                              {msg.category}
+                            </span>
+                            <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDeleteContact(msg.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-sm">{msg.message}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(msg.created_at)}</p>
+                      </div>
+                    ))}
+                    
+                    {Math.ceil(contactMessages.length / ITEMS_PER_PAGE) > 1 && (
+                      <div className="flex items-center justify-center gap-2 pt-4">
+                        <Button variant="outline" size="icon" onClick={() => setContactPage(p => Math.max(1, p - 1))} disabled={contactPage === 1}>
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                        <span className="text-sm">{contactPage} / {Math.ceil(contactMessages.length / ITEMS_PER_PAGE)}</span>
+                        <Button variant="outline" size="icon" onClick={() => setContactPage(p => Math.min(Math.ceil(contactMessages.length / ITEMS_PER_PAGE), p + 1))} disabled={contactPage === Math.ceil(contactMessages.length / ITEMS_PER_PAGE)}>
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Game Requests Tab */}
+          <TabsContent value="requests">
+            <Card className="glass-morphism">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                  طلبات إضافة الألعاب ({gameRequests.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {gameRequests.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">لا توجد طلبات حالياً</p>
+                ) : (
+                  <div className="space-y-4">
+                    {paginatedGameRequests.map((req) => (
+                      <div key={req.id} className="p-4 rounded-xl glass-card space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-semibold flex items-center gap-2">
+                              <Gamepad2 className="w-4 h-4 text-primary" />
+                              {req.game_name}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">{req.full_name} • {req.email}</p>
+                          </div>
+                          <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDeleteRequest(req.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        {req.notes && <p className="text-sm text-muted-foreground">{req.notes}</p>}
+                        <p className="text-xs text-muted-foreground">{formatDate(req.created_at)}</p>
+                      </div>
+                    ))}
+                    
+                    {Math.ceil(gameRequests.length / ITEMS_PER_PAGE) > 1 && (
+                      <div className="flex items-center justify-center gap-2 pt-4">
+                        <Button variant="outline" size="icon" onClick={() => setRequestsPage(p => Math.max(1, p - 1))} disabled={requestsPage === 1}>
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                        <span className="text-sm">{requestsPage} / {Math.ceil(gameRequests.length / ITEMS_PER_PAGE)}</span>
+                        <Button variant="outline" size="icon" onClick={() => setRequestsPage(p => Math.min(Math.ceil(gameRequests.length / ITEMS_PER_PAGE), p + 1))} disabled={requestsPage === Math.ceil(gameRequests.length / ITEMS_PER_PAGE)}>
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
