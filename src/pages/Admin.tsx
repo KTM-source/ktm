@@ -946,17 +946,6 @@ export default function Admin() {
                           </button>
                         )}
                       </div>
-
-                      {/* Preview Image Card */}
-                      <div className="glass-morphism p-4 animate-slide-in-right" style={{ animationDelay: '0.1s' }}>
-                        <p className="text-xs text-muted-foreground mb-3">صورة الغلاف</p>
-                        <img
-                          src={form.image || "/placeholder.svg"}
-                          alt={form.title}
-                          className="w-full h-auto rounded-lg object-cover"
-                          onError={(e) => (e.currentTarget.src = "/placeholder.svg")}
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
