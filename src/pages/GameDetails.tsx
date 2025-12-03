@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout/Layout";
 import { GameCard } from "@/components/games/GameCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useGame, useGames } from "@/hooks/useGames";
+import { parseRichText } from "@/components/admin/RichTextEditor";
 import {
   Download,
   Star,
@@ -121,7 +122,9 @@ const GameDetails = () => {
                 )}
               </div>
 
-              <p className="text-muted-foreground leading-relaxed mb-8 text-lg">{game.description}</p>
+              <div className="text-muted-foreground leading-relaxed mb-8 text-lg">
+                {parseRichText(game.description)}
+              </div>
 
               {game.features && game.features.length > 0 && (
                 <div className="space-y-3">

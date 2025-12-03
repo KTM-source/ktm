@@ -14,6 +14,8 @@ import {
   Download, Star, ExternalLink, X, User, Check, Tag, HardDrive
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ImageUpload } from "@/components/admin/ImageUpload";
+import { RichTextEditor, parseRichText } from "@/components/admin/RichTextEditor";
 
 interface GameForm {
   title: string;
@@ -486,27 +488,18 @@ export default function Admin() {
                       الصور
                     </h3>
                     
-                    <div>
-                      <Label htmlFor="image">رابط الصورة الصغيرة (Portrait) *</Label>
-                      <Input
-                        id="image"
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <ImageUpload
                         value={form.image}
-                        onChange={(e) => setForm({ ...form, image: e.target.value })}
-                        dir="ltr"
-                        placeholder="https://steamrip.com/wp-content/uploads/..."
-                        className="glass-card border-border/50"
-                        required
+                        onChange={(url) => setForm({ ...form, image: url })}
+                        label="الصورة الصغيرة (Portrait) *"
+                        aspectRatio="portrait"
                       />
-                    </div>
-                    <div>
-                      <Label htmlFor="background_image">رابط الخلفية الكبيرة</Label>
-                      <Input
-                        id="background_image"
+                      <ImageUpload
                         value={form.background_image}
-                        onChange={(e) => setForm({ ...form, background_image: e.target.value })}
-                        dir="ltr"
-                        placeholder="https://steamrip.com/wp-content/uploads/..."
-                        className="glass-card border-border/50"
+                        onChange={(url) => setForm({ ...form, background_image: url })}
+                        label="الخلفية الكبيرة (Landscape)"
+                        aspectRatio="landscape"
                       />
                     </div>
                   </div>
@@ -519,14 +512,11 @@ export default function Admin() {
                     </h3>
                     
                     <div>
-                      <Label htmlFor="description">الوصف الكامل *</Label>
-                      <Textarea
-                        id="description"
+                      <Label>الوصف الكامل *</Label>
+                      <RichTextEditor
                         value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        rows={5}
-                        className="glass-card border-border/50"
-                        required
+                        onChange={(val) => setForm({ ...form, description: val })}
+                        rows={8}
                       />
                     </div>
                     <div>
@@ -784,9 +774,9 @@ export default function Admin() {
                           )}
                         </div>
 
-                        <p className="text-muted-foreground leading-relaxed mb-8 text-base">
-                          {form.description || "لا يوجد وصف متاح حالياً"}
-                        </p>
+                        <div className="text-muted-foreground leading-relaxed mb-8 text-base">
+                          {form.description ? parseRichText(form.description) : "لا يوجد وصف متاح حالياً"}
+                        </div>
 
                         {form.features && form.features.trim() && (
                           <div className="space-y-3">
