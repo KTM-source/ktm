@@ -4,11 +4,11 @@ import { Search, Menu, X, Gamepad2, Home, Grid3X3, TrendingUp, Clock, List } fro
 import { cn } from "@/lib/utils";
 
 const navLinks = [
-  { href: "/", label: "الرئيسية", icon: Home },
-  { href: "/games", label: "كل الألعاب", icon: List },
-  { href: "/categories", label: "التصنيفات", icon: Grid3X3 },
-  { href: "/top-games", label: "الأكثر شعبية", icon: TrendingUp },
-  { href: "/recent", label: "آخر التحديثات", icon: Clock },
+  { href: "/", label: "Home", icon: Home },
+  { href: "/games", label: "All Games", icon: List },
+  { href: "/categories", label: "Categories", icon: Grid3X3 },
+  { href: "/top-games", label: "Top Games", icon: TrendingUp },
+  { href: "/recent", label: "Recent", icon: Clock },
 ];
 
 export const Navbar = () => {
@@ -26,7 +26,7 @@ export const Navbar = () => {
               <Gamepad2 className="w-8 h-8 text-primary transition-all duration-300 group-hover:scale-110" />
               <div className="absolute inset-0 bg-primary/30 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
-            <span className="font-display text-xl font-bold gradient-text">GameVault</span>
+            <span className="font-display text-2xl font-black gradient-text tracking-wider">KTM</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -52,14 +52,13 @@ export const Navbar = () => {
 
           {/* Search Bar */}
           <div className="hidden lg:flex items-center relative">
-            <Search className="absolute right-3 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="ابحث عن لعبة..."
+              placeholder="Search games..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input w-64 pr-10 text-right"
-              dir="rtl"
+              className="search-input w-64 pl-10"
             />
           </div>
 
@@ -82,14 +81,13 @@ export const Navbar = () => {
           <div className="pt-4 space-y-2">
             {/* Mobile Search */}
             <div className="relative mb-4">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="ابحث عن لعبة..."
+                placeholder="Search games..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input w-full pr-10 text-right"
-                dir="rtl"
+                className="search-input w-full pl-10"
               />
             </div>
 

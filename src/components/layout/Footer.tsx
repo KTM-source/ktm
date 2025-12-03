@@ -10,10 +10,10 @@ export const Footer = () => {
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-4">
               <Gamepad2 className="w-8 h-8 text-primary" />
-              <span className="font-display text-xl font-bold gradient-text">GameVault</span>
+              <span className="font-display text-2xl font-black gradient-text tracking-wider">KTM</span>
             </Link>
             <p className="text-muted-foreground text-sm leading-relaxed max-w-md">
-              وجهتك الأولى لتحميل أحدث الألعاب. نقدم لك مكتبة ضخمة من الألعاب المجانية مع تحديثات مستمرة.
+              Your ultimate destination for free PC games. We provide a massive library of pre-installed games with direct download links.
             </p>
             <div className="flex gap-4 mt-6">
               <a href="#" className="p-2 rounded-lg bg-muted/50 hover:bg-primary/20 hover:text-primary transition-all duration-300">
@@ -30,26 +30,26 @@ export const Footer = () => {
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-display font-bold text-foreground mb-4">روابط سريعة</h4>
+            <h4 className="font-display font-bold text-foreground mb-4">Quick Links</h4>
             <ul className="space-y-2">
               <li>
                 <Link to="/games" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  كل الألعاب
+                  All Games
                 </Link>
               </li>
               <li>
                 <Link to="/categories" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  التصنيفات
+                  Categories
                 </Link>
               </li>
               <li>
                 <Link to="/top-games" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  الأكثر شعبية
+                  Top Games
                 </Link>
               </li>
               <li>
                 <Link to="/recent" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  آخر التحديثات
+                  Recent Updates
                 </Link>
               </li>
             </ul>
@@ -57,26 +57,26 @@ export const Footer = () => {
 
           {/* Support */}
           <div>
-            <h4 className="font-display font-bold text-foreground mb-4">الدعم</h4>
+            <h4 className="font-display font-bold text-foreground mb-4">Support</h4>
             <ul className="space-y-2">
               <li>
                 <a href="#" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  الأسئلة الشائعة
+                  FAQ
                 </a>
               </li>
               <li>
                 <a href="#" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  طريقة التحميل
+                  How to Download
                 </a>
               </li>
               <li>
                 <a href="#" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  تواصل معنا
+                  Contact Us
                 </a>
               </li>
               <li>
                 <a href="#" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  الإبلاغ عن مشكلة
+                  Report Issue
                 </a>
               </li>
             </ul>
@@ -85,7 +85,7 @@ export const Footer = () => {
 
         <div className="border-t border-border/30 mt-8 pt-8 text-center">
           <p className="text-muted-foreground text-sm">
-            © 2024 GameVault. جميع الحقوق محفوظة.
+            © 2024 KTM. All rights reserved.
           </p>
         </div>
       </div>
