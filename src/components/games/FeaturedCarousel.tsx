@@ -50,7 +50,7 @@ export const FeaturedCarousel = ({ games }: FeaturedCarouselProps) => {
           )}
         >
           <img
-            src={game.image}
+            src={game.backgroundImage || game.image}
             alt={game.title}
             className="w-full h-full object-cover"
           />
@@ -80,32 +80,38 @@ export const FeaturedCarousel = ({ games }: FeaturedCarouselProps) => {
           </h1>
 
           {/* Description */}
-          <p className="text-lg text-muted-foreground leading-relaxed">
+          <p className="text-lg text-muted-foreground leading-relaxed line-clamp-3">
             {currentGame.description}
           </p>
 
           {/* Info */}
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <span>الحجم: {currentGame.size}</span>
+            <span>Size: {currentGame.size}</span>
             <span>•</span>
             <span>{currentGame.platforms.join(" / ")}</span>
+            {currentGame.developer && (
+              <>
+                <span>•</span>
+                <span>{currentGame.developer}</span>
+              </>
+            )}
           </div>
 
           {/* Buttons */}
           <div className="flex items-center gap-4 pt-4">
             <Link
-              to={`/game/${currentGame.slug}`}
+              to={`/${currentGame.slug}`}
               className="btn-primary flex items-center gap-2 text-lg"
             >
               <Download className="w-5 h-5 relative z-10" />
-              <span className="relative z-10">تحميل الآن</span>
+              <span className="relative z-10">Download Now</span>
             </Link>
             <Link
-              to={`/game/${currentGame.slug}`}
+              to={`/${currentGame.slug}`}
               className="px-6 py-3 rounded-lg border border-border/50 hover:border-primary/50 hover:bg-primary/10 transition-all duration-300 flex items-center gap-2"
             >
               <Play className="w-5 h-5" />
-              <span>المزيد</span>
+              <span>More Info</span>
             </Link>
           </div>
         </div>

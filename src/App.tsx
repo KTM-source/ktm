@@ -22,10 +22,11 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/games" element={<Games />} />
-          <Route path="/game/:slug" element={<GameDetails />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/top-games" element={<TopGames />} />
           <Route path="/recent" element={<RecentGames />} />
+          {/* Game detail route - matches /game-slug-free-download */}
+          <Route path="/:slug" element={<GameDetails />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

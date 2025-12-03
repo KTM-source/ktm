@@ -11,7 +11,7 @@ interface GameCardProps {
 export const GameCard = ({ game, index = 0 }: GameCardProps) => {
   return (
     <Link
-      to={`/game/${game.slug}`}
+      to={`/${game.slug}`}
       className={cn(
         "game-card group block opacity-0 animate-slide-up",
         `stagger-${(index % 6) + 1}`
@@ -23,6 +23,7 @@ export const GameCard = ({ game, index = 0 }: GameCardProps) => {
           src={game.image}
           alt={game.title}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          loading="lazy"
         />
         
         {/* Overlay Gradient */}
@@ -30,13 +31,13 @@ export const GameCard = ({ game, index = 0 }: GameCardProps) => {
         
         {/* Version Badge */}
         <div className="absolute top-3 left-3">
-          <span className="version-badge">{game.version}</span>
+          <span className="version-badge text-[10px]">{game.version}</span>
         </div>
 
         {/* Platform Badge */}
         <div className="absolute top-3 right-3 flex gap-1">
-          {game.platforms.map((platform) => (
-            <span key={platform} className="platform-badge flex items-center gap-1">
+          {game.platforms.slice(0, 1).map((platform) => (
+            <span key={platform} className="platform-badge flex items-center gap-1 text-[10px]">
               <Monitor className="w-3 h-3" />
               {platform}
             </span>
@@ -55,18 +56,18 @@ export const GameCard = ({ game, index = 0 }: GameCardProps) => {
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
           <div className="btn-primary flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
             <Download className="w-4 h-4" />
-            <span className="relative z-10">تحميل</span>
+            <span className="relative z-10">Download</span>
           </div>
         </div>
       </div>
 
       {/* Info */}
       <div className="p-4 space-y-2">
-        <h3 className="font-display font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-          {game.title}
+        <h3 className="font-display font-bold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2">
+          {game.title} Free Download
         </h3>
         <div className="flex items-center justify-between">
-          <span className="category-badge">{game.category}</span>
+          <span className="category-badge text-[10px]">{game.category}</span>
           <span className="text-xs text-muted-foreground">{game.size}</span>
         </div>
       </div>
