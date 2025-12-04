@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Download, Star, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseRichText } from "@/components/admin/RichTextEditor";
 
 interface FeaturedGame {
   id: string;
@@ -80,10 +81,10 @@ export const FeaturedCarousel = ({ games }: FeaturedCarouselProps) => {
           <h1 className="font-display text-4xl md:text-6xl font-black text-foreground">
             {currentGame.title}
           </h1>
-          <p className="text-lg text-muted-foreground line-clamp-3">{currentGame.description}</p>
+          <div className="text-lg text-muted-foreground line-clamp-3">{parseRichText(currentGame.description)}</div>
           <Link to={`/${currentGame.slug}`} className="btn-primary inline-flex items-center gap-2">
-            <Download className="w-5 h-5" />
-            <span>تحميل الآن</span>
+            <Download className="w-5 h-5 relative z-10" />
+            <span className="relative z-10">تحميل الآن</span>
           </Link>
         </div>
       </div>

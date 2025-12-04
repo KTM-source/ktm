@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { Layout } from "@/components/layout/Layout";
 import { GameCard } from "@/components/games/GameCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -67,8 +68,37 @@ const GameDetails = () => {
     });
   };
 
+  // Get plain text description for meta (strip formatting)
+  const plainDescription = game.description
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\{[^:]+:([^}]+)\}/g, '$1')
+    .replace(/^- /gm, '')
+    .substring(0, 160);
+
+  const pageUrl = `https://ktm.lovable.app/${game.slug}`;
+  const gameImage = game.image || game.background_image;
+
   return (
     <Layout>
+      <Helmet>
+        <title>{game.title} - Free Download | KTM</title>
+        <meta name="description" content={plainDescription} />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={pageUrl} />
+        <meta property="og:title" content={`${game.title} - Free Download | KTM`} />
+        <meta property="og:description" content={plainDescription} />
+        <meta property="og:image" content={gameImage || ''} />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content={pageUrl} />
+        <meta name="twitter:title" content={`${game.title} - Free Download | KTM`} />
+        <meta name="twitter:description" content={plainDescription} />
+        <meta name="twitter:image" content={gameImage || ''} />
+      </Helmet>
+
       {/* Hero Section */}
       <div className="relative h-[60vh] min-h-[500px] overflow-hidden">
         <img
@@ -278,14 +308,14 @@ const GameDetails = () => {
               </div>
 
               {game.download_link && (
-                <a
-                  href={game.download_link}
+                <button
+                  onClick={() => window.location.href = game.download_link!}
                   className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-lg animate-scale-in"
                   style={{ animationDelay: '0.3s' }}
                 >
-                  <Download className="w-5 h-5" />
-                  <span className="font-bold">تحميل اللعبة</span>
-                </a>
+                  <Download className="w-5 h-5 relative z-10" />
+                  <span className="font-bold relative z-10">تحميل اللعبة</span>
+                </button>
               )}
             </div>
           </div>
