@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { MessageCircle, Send, X, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { MessageCircle, Send, X, Bot, User, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ interface GameContext {
   size: string;
   version: string;
   description: string;
+  slug?: string;
 }
 
 interface GameChatbotProps {
@@ -23,14 +24,61 @@ interface GameChatbotProps {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/game-chat`;
+const CHAT_STORAGE_PREFIX = "ktm_chat_";
+
+const getChatStorageKey = (gameTitle: string) => {
+  return `${CHAT_STORAGE_PREFIX}${gameTitle.toLowerCase().replace(/\s+/g, '_')}`;
+};
+
+const loadMessages = (gameTitle: string): Message[] => {
+  try {
+    const stored = localStorage.getItem(getChatStorageKey(gameTitle));
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveMessages = (gameTitle: string, messages: Message[]) => {
+  try {
+    localStorage.setItem(getChatStorageKey(gameTitle), JSON.stringify(messages));
+  } catch {
+    // Ignore storage errors
+  }
+};
+
+const clearMessages = (gameTitle: string) => {
+  try {
+    localStorage.removeItem(getChatStorageKey(gameTitle));
+  } catch {
+    // Ignore storage errors
+  }
+};
 
 export const GameChatbot = ({ gameContext }: GameChatbotProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => loadMessages(gameContext.title));
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Save messages whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessages(gameContext.title, messages);
+    }
+  }, [messages, gameContext.title]);
+
+  // Load messages when game changes
+  useEffect(() => {
+    setMessages(loadMessages(gameContext.title));
+  }, [gameContext.title]);
+
+  const handleClearChat = useCallback(() => {
+    clearMessages(gameContext.title);
+    setMessages([]);
+  }, [gameContext.title]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -184,14 +232,27 @@ export const GameChatbot = ({ gameContext }: GameChatbotProps) => {
               <p className="text-xs text-muted-foreground">مساعدك الذكي للألعاب</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsOpen(false)}
-            className="hover:bg-destructive/10 hover:text-destructive rounded-full"
-          >
-            <X className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClearChat}
+                className="hover:bg-destructive/10 hover:text-destructive rounded-full"
+                title="مسح المحادثة"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsOpen(false)}
+              className="hover:bg-destructive/10 hover:text-destructive rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* Messages */}
