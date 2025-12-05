@@ -247,6 +247,7 @@ export type Database = {
           first_name: string
           id: string
           last_name: string | null
+          last_username_change: string | null
           totp_enabled: boolean | null
           totp_secret: string | null
           updated_at: string
@@ -259,6 +260,7 @@ export type Database = {
           first_name: string
           id?: string
           last_name?: string | null
+          last_username_change?: string | null
           totp_enabled?: boolean | null
           totp_secret?: string | null
           updated_at?: string
@@ -271,6 +273,7 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string | null
+          last_username_change?: string | null
           totp_enabled?: boolean | null
           totp_secret?: string | null
           updated_at?: string

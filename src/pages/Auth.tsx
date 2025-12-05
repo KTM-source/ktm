@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Mail, Lock, User, Loader2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Loader2, ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
 import { z } from 'zod';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
@@ -44,6 +44,10 @@ const Auth = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   
+  // Username availability
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  
   // 2FA signup state
   const [show2FASetup, setShow2FASetup] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -63,6 +67,46 @@ const Auth = () => {
       navigate('/');
     }
   }, [user, navigate, show2FASetup, show2FALogin]);
+
+  // Username availability check with debounce
+  const checkUsernameAvailability = useCallback(async (value: string) => {
+    if (!value) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    // Validate format first
+    const isValidFormat = /^[a-zA-Z0-9_-]{3,28}$/.test(value);
+    if (!isValidFormat) {
+      setUsernameAvailable(false);
+      return;
+    }
+
+    setCheckingUsername(true);
+    try {
+      const { data, error } = await supabase.rpc('is_username_available', {
+        check_username: value
+      });
+      
+      if (!error) {
+        setUsernameAvailable(data);
+      }
+    } catch (err) {
+      console.error('Username check error:', err);
+    }
+    setCheckingUsername(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isLogin && username) {
+      const timer = setTimeout(() => {
+        checkUsernameAvailability(username);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setUsernameAvailable(null);
+    }
+  }, [username, isLogin, checkUsernameAvailability]);
 
   const generateTOTP = async () => {
     const secret = new OTPAuth.Secret({ size: 20 });
@@ -340,13 +384,28 @@ const Auth = () => {
                       placeholder="username_123"
                       value={username}
                       onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                      className="pr-10"
+                      className="pr-10 pl-10"
                       dir="ltr"
                       required
                     />
+                    {username && (
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                        {checkingUsername ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        ) : usernameAvailable === true ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        ) : usernameAvailable === false ? (
+                          <XCircle className="w-4 h-4 text-red-500" />
+                        ) : null}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    3-28 حرف إنجليزي، أرقام، شرطات فقط
+                  <p className={`text-xs mt-1 ${usernameAvailable === false ? 'text-red-500' : usernameAvailable === true ? 'text-green-500' : 'text-muted-foreground'}`}>
+                    {usernameAvailable === true 
+                      ? 'اسم المستخدم متاح ✓' 
+                      : usernameAvailable === false 
+                        ? 'اسم المستخدم غير متاح أو غير صالح' 
+                        : '3-28 حرف إنجليزي، أرقام، شرطات فقط'}
                   </p>
                 </div>
               </>
