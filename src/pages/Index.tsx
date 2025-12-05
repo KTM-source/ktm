@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
-import { FeaturedCarousel } from "@/components/games/FeaturedCarousel";
+import { HeroCarousel } from "@/components/games/HeroCarousel";
 import { GameCard } from "@/components/games/GameCard";
 import { CategoryCard } from "@/components/games/CategoryCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -14,7 +14,6 @@ const Index = () => {
   const { games, categories, isLoading } = useGames();
   const [visibleGames, setVisibleGames] = useState(GAMES_PER_PAGE);
   
-  const featuredGames = games.filter(g => g.rating && g.rating >= 4.5).slice(0, 5);
   const recentGames = games.slice(0, visibleGames);
   const hasMoreGames = games.length > visibleGames;
 
@@ -34,8 +33,8 @@ const Index = () => {
 
   return (
     <Layout>
-      {/* Hero Carousel */}
-      {featuredGames.length > 0 && <FeaturedCarousel games={featuredGames} />}
+      {/* Hero Carousel - Games with rating >= 4.2 from last week */}
+      <HeroCarousel games={games} />
 
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
