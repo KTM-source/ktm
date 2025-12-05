@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
+import { useAuth } from '@/hooks/useAuth';
 import { useUserStats } from '@/hooks/useUserStats';
 import { useAchievements, ACHIEVEMENTS } from '@/hooks/useAchievements';
 import { useFavorites } from '@/hooks/useFavorites';
 import { supabase } from '@/integrations/supabase/client';
 import { GameCard } from '@/components/games/GameCard';
+import { Button } from '@/components/ui/button';
 import { 
   Trophy, Eye, Download, Heart, MessageCircle, 
-  Calendar, Flame, Clock, Award, Lock, Star
+  Calendar, Flame, Award, Lock, Star, Settings,
+  User, LogOut, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -27,10 +31,18 @@ interface Game {
 }
 
 const Profile = () => {
+  const navigate = useNavigate();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const { stats, isLoading: statsLoading } = useUserStats();
   const { achievements, isLoading: achievementsLoading } = useAchievements();
   const { favorites, isLoading: favoritesLoading } = useFavorites();
   const [favoriteGames, setFavoriteGames] = useState<Game[]>([]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     const fetchFavoriteGames = async () => {
@@ -48,6 +60,11 @@ const Profile = () => {
     fetchFavoriteGames();
   }, [favorites]);
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
   const allAchievements = Object.entries(ACHIEVEMENTS).map(([key, value]) => ({
     type: key,
     ...value,
@@ -59,6 +76,16 @@ const Profile = () => {
   const totalCount = Object.keys(ACHIEVEMENTS).length;
   const progressPercent = (unlockedCount / totalCount) * 100;
 
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="min-h-screen pt-24 pb-16">
@@ -67,11 +94,30 @@ const Profile = () => {
           <div className="relative mb-12">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-purple-500/20 to-pink-500/20 blur-3xl -z-10" />
             <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-4xl shadow-2xl shadow-primary/30">
-                🎮
+              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-2xl shadow-primary/30 overflow-hidden">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-12 h-12 text-white" />
+                )}
               </div>
-              <h1 className="text-4xl font-bold mb-2">ملفي الشخصي</h1>
-              <p className="text-muted-foreground">إحصائياتك وإنجازاتك في كَتَم</p>
+              <h1 className="text-4xl font-bold mb-2">
+                {profile?.first_name} {profile?.last_name || ''}
+              </h1>
+              <p className="text-muted-foreground mb-4">@{profile?.username}</p>
+              
+              <div className="flex items-center justify-center gap-3">
+                <Link to="/account">
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Settings className="w-4 h-4" />
+                    إعدادات الحساب
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2 text-red-500 hover:text-red-600">
+                  <LogOut className="w-4 h-4" />
+                  تسجيل الخروج
+                </Button>
+              </div>
             </div>
           </div>
 

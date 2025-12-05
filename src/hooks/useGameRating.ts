@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getUserId } from './useUserId';
+import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
 interface RatingInfo {
@@ -10,6 +10,7 @@ interface RatingInfo {
 }
 
 export const useGameRating = (gameId: string) => {
+  const { user } = useAuth();
   const [ratingInfo, setRatingInfo] = useState<RatingInfo>({
     userRating: null,
     averageRating: 0,
@@ -19,16 +20,14 @@ export const useGameRating = (gameId: string) => {
 
   const fetchRating = useCallback(async () => {
     if (!gameId) return;
-    
-    const userId = getUserId();
 
     // Fetch user's rating
-    if (userId) {
+    if (user?.id) {
       const { data: userRating } = await supabase
         .from('game_ratings')
         .select('rating')
         .eq('game_id', gameId)
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .single();
 
       if (userRating) {
@@ -52,20 +51,24 @@ export const useGameRating = (gameId: string) => {
     }
 
     setIsLoading(false);
-  }, [gameId]);
+  }, [gameId, user?.id]);
 
   useEffect(() => {
     fetchRating();
   }, [fetchRating]);
 
   const submitRating = async (rating: number) => {
-    const userId = getUserId();
-    if (!userId || !gameId) return false;
+    if (!user?.id) {
+      toast.error('يجب تسجيل الدخول للتقييم');
+      return false;
+    }
+    
+    if (!gameId) return false;
 
     const { error } = await supabase
       .from('game_ratings')
       .upsert({
-        user_id: userId,
+        user_id: user.id,
         game_id: gameId,
         rating
       }, {
@@ -86,6 +89,7 @@ export const useGameRating = (gameId: string) => {
     ...ratingInfo,
     isLoading,
     submitRating,
-    refetch: fetchRating
+    refetch: fetchRating,
+    isLoggedIn: !!user
   };
 };
