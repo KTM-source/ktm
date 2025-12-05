@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Challenge types that can be auto-verified
+const CHALLENGE_TYPES = {
+  COMMENT: "comment", // Write a specific comment
+  RATE_GAMES: "rate_games", // Rate X games
+  ADD_FAVORITES: "add_favorites", // Add X games to favorites
+  VIEW_GAMES: "view_games", // View X games
+  AVATAR_CHANGE: "avatar_change", // Change avatar to something specific
+  SEND_MESSAGE: "send_message", // Send a contact message
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -23,19 +33,18 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { userId, batchMode } = await req.json();
 
-    // Calculate expiry time (next 3 AM)
+    // Calculate expiry time (next 3 AM UTC)
     const now = new Date();
     const expiresAt = new Date();
-    expiresAt.setHours(3, 0, 0, 0);
+    expiresAt.setUTCHours(3, 0, 0, 0);
     if (expiresAt <= now) {
       expiresAt.setDate(expiresAt.getDate() + 1);
     }
 
-    // If batch mode, get all users who need challenges
+    // Get users to process
     let usersToProcess: string[] = [];
     
     if (batchMode) {
-      // Get all users
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id");
@@ -53,6 +62,14 @@ serve(async (req) => {
       });
     }
 
+    // Get games for reference
+    const { data: games } = await supabase
+      .from("games")
+      .select("id, title, slug")
+      .limit(50);
+
+    const gamesList = games?.map(g => g.title).join("، ") || "";
+
     // Process in batches of 50
     const batchSize = 50;
     const results: any[] = [];
@@ -60,7 +77,7 @@ serve(async (req) => {
     for (let i = 0; i < usersToProcess.length; i += batchSize) {
       const batch = usersToProcess.slice(i, i + batchSize);
       
-      // Get existing challenge hashes for these users to avoid duplicates
+      // Get existing challenge hashes for these users
       const { data: existingChallenges } = await supabase
         .from("user_challenges")
         .select("user_id, challenge_hash")
@@ -74,47 +91,57 @@ serve(async (req) => {
         existingHashesByUser[c.user_id].add(c.challenge_hash);
       });
 
-      // Get user profiles for personalization
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, username, first_name")
-        .in("user_id", batch);
+      // Generate auto-verifiable challenges using AI
+      const prompt = `أنت مولد تحديات لموقع ألعاب. أنشئ ${batch.length * 3} تحدي قابل للتحقق التلقائي.
 
-      const userProfiles: Record<string, any> = {};
-      profiles?.forEach(p => {
-        userProfiles[p.user_id] = p;
-      });
+أنواع التحديات المتاحة (يجب استخدام هذه الأنواع فقط):
 
-      // Generate challenges using AI
-      const prompt = `أنت مولد تحديات ألعاب إبداعي. اكتب ${batch.length * 3} تحدي فريد ومبتكر للاعبين.
+1. "comment" - كتابة تعليق بمحتوى محدد وغريب
+   - مثال: اكتب تعليق يقول "أنا بطاطس محشية 🥔"
+   - مثال: اكتب تعليق يحتوي على 3 إيموجي حيوانات متتالية
 
-قواعد التحديات:
-- كل تحدي يجب أن يكون قابل للتحقق بسهولة
-- التحديات يجب أن تكون ممتعة ومتنوعة
-- بعض التحديات غريبة ومضحكة
-- بعض التحديات متعلقة بالألعاب
-- بعض التحديات اجتماعية (مشاركة، تعليق، تقييم)
-- لا تكرر نفس التحدي أبداً
+2. "rate_games" - تقييم عدد معين من الألعاب
+   - مثال: قيّم 3 ألعاب بـ 5 نجوم
+   - مثال: قيّم لعبتين مختلفتين اليوم
 
-أمثلة على أنواع التحديات:
-- "أضف 3 ألعاب جديدة للمفضلة اليوم"
-- "قيّم 5 ألعاب مختلفة"
-- "اكتب تعليق على لعبة لم تجربها من قبل"
-- "شاهد صفحة 10 ألعاب مختلفة"
-- "استخدم البحث للعثور على لعبة بحرف الميم"
-- "أرسل رسالة للدعم الفني تشكرهم"
-- "اقضِ 15 دقيقة في تصفح الموقع"
-- "اكتشف قسم جديد لم تزره من قبل"
-- "شارك لعبة مع صديق"
-- "اقرأ متطلبات النظام لـ 3 ألعاب"
+3. "add_favorites" - إضافة ألعاب للمفضلة
+   - مثال: أضف 4 ألعاب جديدة لقائمة المفضلة
+   - مثال: أضف لعبة من فئة Action للمفضلة
 
-أرجع JSON array فقط بهذا الشكل (بدون أي نص إضافي):
+4. "view_games" - مشاهدة صفحات ألعاب
+   - مثال: شاهد 5 صفحات ألعاب مختلفة
+   - مثال: استكشف 3 ألعاب من فئة Adventure
+
+5. "avatar_change" - تغيير صورة الملف الشخصي
+   - مثال: غيّر صورتك لصورة قطة ترتدي نظارة شمسية
+   - مثال: غيّر الأفتار لصورة بطريق يأكل بيتزا
+   - مثال: حط صورة دب يلعب كرة قدم
+
+6. "send_message" - إرسال رسالة للدعم
+   - مثال: أرسل رسالة شكر للفريق
+   - مثال: اقترح لعبة جديدة عبر نموذج التواصل
+
+قواعد مهمة:
+- كل تحدي يجب أن يكون فريد وغير مكرر
+- تحديات التعليقات يجب أن تكون غريبة ومضحكة جداً
+- تحديات الأفتار يجب أن تكون وصف دقيق لصورة غريبة وواضحة
+- ضمّن الـ verification_data وهو البيانات المطلوبة للتحقق
+
+أرجع JSON array فقط بهذا الشكل:
 [
-  {"text": "نص التحدي", "description": "وصف قصير", "type": "gaming|social|exploration|creative"},
-  ...
+  {
+    "text": "نص التحدي الظاهر للمستخدم",
+    "description": "وصف قصير",
+    "type": "comment|rate_games|add_favorites|view_games|avatar_change|send_message",
+    "verification_data": {
+      "required_text": "النص المطلوب للتعليق (فقط لـ comment)",
+      "required_count": 3,
+      "avatar_description": "وصف الصورة المطلوبة (فقط لـ avatar_change)"
+    }
+  }
 ]
 
-أنشئ ${batch.length * 3} تحدي مختلف تماماً.`;
+أنشئ ${batch.length * 3} تحدي متنوع وغريب.`;
 
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -125,7 +152,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: "أنت مساعد يكتب تحديات ألعاب إبداعية باللغة العربية. أرجع JSON فقط." },
+            { role: "system", content: "أنت مساعد يكتب تحديات ألعاب إبداعية وغريبة باللغة العربية. أرجع JSON فقط." },
             { role: "user", content: prompt }
           ],
         }),
@@ -162,15 +189,19 @@ serve(async (req) => {
 
         while (userChallenges.length < 3 && challengeIndex < challenges.length) {
           const challenge = challenges[challengeIndex];
-          const hash = btoa(encodeURIComponent(challenge.text)).slice(0, 32);
+          const hash = btoa(encodeURIComponent(challenge.text + Date.now())).slice(0, 32);
           
-          // Check if this challenge was already given to this user
+          // Ensure no duplicates
           if (!userExistingHashes.has(hash)) {
             userChallenges.push({
               user_id: currentUserId,
               challenge_text: challenge.text,
-              challenge_description: challenge.description,
-              challenge_type: challenge.type || "gaming",
+              challenge_description: JSON.stringify({
+                description: challenge.description,
+                type: challenge.type,
+                verification_data: challenge.verification_data
+              }),
+              challenge_type: challenge.type || "comment",
               challenge_hash: hash,
               expires_at: expiresAt.toISOString(),
             });
@@ -179,7 +210,7 @@ serve(async (req) => {
           challengeIndex++;
         }
 
-        // Insert challenges for this user
+        // Insert challenges
         if (userChallenges.length > 0) {
           const { error } = await supabase
             .from("user_challenges")

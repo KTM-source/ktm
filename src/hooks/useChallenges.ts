@@ -2,6 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface ChallengeVerificationData {
+  description?: string;
+  type?: string;
+  verification_data?: {
+    required_text?: string;
+    required_count?: number;
+    avatar_description?: string;
+  };
+}
+
 interface Challenge {
   id: string;
   user_id: string;
@@ -12,6 +22,7 @@ interface Challenge {
   completed_at: string | null;
   created_at: string;
   expires_at: string;
+  parsed_data?: ChallengeVerificationData;
 }
 
 interface VerificationStatus {
@@ -50,7 +61,6 @@ export const useChallenges = () => {
       return;
     }
 
-    // Get today's challenges (not expired)
     const now = new Date().toISOString();
     
     const { data, error } = await supabase
@@ -62,7 +72,19 @@ export const useChallenges = () => {
       .limit(3);
 
     if (!error && data) {
-      setChallenges(data as Challenge[]);
+      // Parse challenge descriptions
+      const parsedChallenges = data.map(c => {
+        let parsed_data: ChallengeVerificationData = {};
+        try {
+          if (c.challenge_description) {
+            parsed_data = JSON.parse(c.challenge_description);
+          }
+        } catch (e) {
+          // Keep empty parsed_data
+        }
+        return { ...c, parsed_data } as Challenge;
+      });
+      setChallenges(parsedChallenges);
     }
     
     setIsLoading(false);
@@ -93,52 +115,60 @@ export const useChallenges = () => {
     setIsLoading(false);
   }, [userId, fetchChallenges]);
 
-  const completeChallenge = useCallback(async (challengeId: string) => {
-    if (!userId) return false;
+  // Verify a challenge based on action
+  const verifyChallenge = useCallback(async (
+    challengeId: string, 
+    action: string, 
+    actionData?: Record<string, any>
+  ) => {
+    if (!userId) return { verified: false };
 
-    // Update challenge as completed
-    const { error: updateError } = await supabase
-      .from('user_challenges')
-      .update({ 
-        is_completed: true, 
-        completed_at: new Date().toISOString() 
-      })
-      .eq('id', challengeId)
-      .eq('user_id', userId);
-
-    if (updateError) {
-      toast.error('حدث خطأ في إكمال التحدي');
-      return false;
-    }
-
-    // Record completion
-    const { error: insertError } = await supabase
-      .from('challenge_completions')
-      .insert({
-        user_id: userId,
-        challenge_id: challengeId
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-challenge', {
+        body: { userId, challengeId, action, actionData }
       });
 
-    if (insertError) {
-      console.error('Error recording completion:', insertError);
-    }
+      if (error) {
+        console.error('Error verifying challenge:', error);
+        return { verified: false };
+      }
 
-    toast.success('تم إكمال التحدي! 🎉');
-    
-    // Update local state
-    setChallenges(prev => 
-      prev.map(c => 
-        c.id === challengeId 
-          ? { ...c, is_completed: true, completed_at: new Date().toISOString() } 
-          : c
-      )
+      if (data?.verified) {
+        toast.success(data.message || 'تم إنجاز التحدي! 🎉');
+        
+        // Update local state
+        setChallenges(prev => 
+          prev.map(c => 
+            c.id === challengeId 
+              ? { ...c, is_completed: true, completed_at: new Date().toISOString() } 
+              : c
+          )
+        );
+
+        // Check verification status
+        await checkVerification();
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Error:', err);
+      return { verified: false };
+    }
+  }, [userId]);
+
+  // Auto-verify challenges based on user activity
+  const autoVerifyChallenges = useCallback(async (action: string, actionData?: Record<string, any>) => {
+    if (!userId || challenges.length === 0) return;
+
+    // Find incomplete challenges that match the action type
+    const matchingChallenges = challenges.filter(c => 
+      !c.is_completed && c.challenge_type === action
     );
 
-    // Check verification status
-    await checkVerification();
-
-    return true;
-  }, [userId]);
+    for (const challenge of matchingChallenges) {
+      await verifyChallenge(challenge.id, action, actionData);
+    }
+  }, [userId, challenges, verifyChallenge]);
 
   const checkVerification = useCallback(async () => {
     if (!userId) return;
@@ -174,7 +204,8 @@ export const useChallenges = () => {
     challenges,
     isLoading,
     verificationStatus,
-    completeChallenge,
+    verifyChallenge,
+    autoVerifyChallenges,
     generateNewChallenges,
     checkVerification,
     refetch: fetchChallenges

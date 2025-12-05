@@ -76,8 +76,8 @@ export const GameCard = ({ game, index = 0 }: GameCardProps) => {
           <FavoriteButton gameId={game.id} />
         </div>
 
-        {/* New/Updated Tags */}
-        <div className="absolute top-12 right-3 flex flex-col gap-1">
+        {/* New/Updated Tags - Top Left Corner */}
+        <div className="absolute top-3 left-3 flex flex-col gap-1 z-10">
           {isNew && (
             <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-green-500/90 text-white backdrop-blur-sm font-bold animate-pulse">
               <Sparkles className="w-3 h-3" />
