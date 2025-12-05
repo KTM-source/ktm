@@ -121,10 +121,10 @@ const Auth = () => {
           return;
         }
 
-        const { error, needsTOTP, userId } = await signUp(email, password, username, firstName, lastName);
+        const { error, userId } = await signUp(email, password, username, firstName, lastName);
         if (error) {
           toast.error(error.message);
-        } else if (needsTOTP && userId) {
+        } else if (userId) {
           setPendingUserId(userId);
           await generateTOTP();
           setShow2FA(true);
