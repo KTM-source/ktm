@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getUserId } from './useUserId';
+import { useAuth } from './useAuth';
 
 interface UserStats {
   id: string;
@@ -17,24 +17,28 @@ interface UserStats {
 }
 
 export const useUserStats = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
-    const userId = getUserId();
-    if (!userId) return;
+    if (!user?.id) {
+      setStats(null);
+      setIsLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from('user_stats')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .single();
 
     if (error && error.code === 'PGRST116') {
       // Create new stats record
       const { data: newData } = await supabase
         .from('user_stats')
-        .insert({ user_id: userId })
+        .insert({ user_id: user.id })
         .select()
         .single();
       
@@ -65,28 +69,27 @@ export const useUserStats = () => {
             streak_days: newStreakDays,
             longest_streak: newLongestStreak
           })
-          .eq('user_id', userId);
+          .eq('user_id', user.id);
       }
 
       setStats({ ...data, streak_days: newStreakDays, longest_streak: newLongestStreak });
     }
     setIsLoading(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
   const incrementStat = async (stat: 'games_viewed' | 'games_downloaded' | 'favorites_count' | 'chat_messages_sent') => {
-    const userId = getUserId();
-    if (!userId || !stats) return;
+    if (!user?.id || !stats) return;
 
     const newValue = (stats[stat] || 0) + 1;
     
     await supabase
       .from('user_stats')
       .update({ [stat]: newValue })
-      .eq('user_id', userId);
+      .eq('user_id', user.id);
 
     setStats(prev => prev ? { ...prev, [stat]: newValue } : null);
   };

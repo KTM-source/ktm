@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getUserId } from './useUserId';
+import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
 interface Achievement {
@@ -29,33 +29,36 @@ export const ACHIEVEMENTS = {
 };
 
 export const useAchievements = () => {
+  const { user } = useAuth();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
 
   const fetchAchievements = useCallback(async () => {
-    const userId = getUserId();
-    if (!userId) return;
+    if (!user?.id) {
+      setAchievements([]);
+      setIsLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from('user_achievements')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('unlocked_at', { ascending: false });
 
     if (!error && data) {
       setAchievements(data);
     }
     setIsLoading(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchAchievements();
   }, [fetchAchievements]);
 
   const unlockAchievement = async (type: keyof typeof ACHIEVEMENTS) => {
-    const userId = getUserId();
-    if (!userId) return false;
+    if (!user?.id) return false;
 
     const achievement = ACHIEVEMENTS[type];
     if (!achievement) return false;
@@ -67,7 +70,7 @@ export const useAchievements = () => {
     const { data, error } = await supabase
       .from('user_achievements')
       .insert({
-        user_id: userId,
+        user_id: user.id,
         achievement_type: type,
         achievement_name: achievement.name,
         achievement_icon: achievement.icon

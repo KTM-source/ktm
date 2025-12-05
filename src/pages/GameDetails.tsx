@@ -12,8 +12,10 @@ import { addViewedGame } from "@/hooks/usePersonalizedRecommendations";
 import { GameChatbot } from "@/components/games/GameChatbot";
 import { FavoriteButton } from "@/components/games/FavoriteButton";
 import { GameRating } from "@/components/games/GameRating";
+import { GameComments } from "@/components/games/GameComments";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useUserStats } from "@/hooks/useUserStats";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Download,
   Star,
@@ -34,6 +36,7 @@ const GameDetails = () => {
   const { incrementViews } = useGames();
   const { unlockAchievement } = useAchievements();
   const { incrementStat } = useUserStats();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (game) {
@@ -351,6 +354,11 @@ const GameDetails = () => {
             </div>
           </div>
         </div>
+
+        {/* Comments Section */}
+        <section className="py-8 animate-fade-in" style={{ animationDelay: '0.35s' }}>
+          <GameComments gameId={game.id} />
+        </section>
 
         {/* Related Games */}
         {relatedGames.length > 0 && (

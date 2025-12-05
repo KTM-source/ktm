@@ -68,27 +68,62 @@ export type Database = {
         }
         Relationships: []
       }
+      game_comments: {
+        Row: {
+          content: string
+          created_at: string
+          game_id: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          game_id: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          game_id?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_comments_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_ratings: {
         Row: {
           created_at: string
           game_id: string
           id: string
           rating: number
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           game_id: string
           id?: string
           rating: number
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           game_id?: string
           id?: string
           rating?: number
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -205,6 +240,45 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          first_name: string
+          id: string
+          last_name: string | null
+          totp_enabled: boolean | null
+          totp_secret: string | null
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          first_name: string
+          id?: string
+          last_name?: string | null
+          totp_enabled?: boolean | null
+          totp_secret?: string | null
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          first_name?: string
+          id?: string
+          last_name?: string | null
+          totp_enabled?: boolean | null
+          totp_secret?: string | null
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
       reports: {
         Row: {
           created_at: string
@@ -272,7 +346,7 @@ export type Database = {
           achievement_type: string
           id: string
           unlocked_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           achievement_icon: string
@@ -280,7 +354,7 @@ export type Database = {
           achievement_type: string
           id?: string
           unlocked_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           achievement_icon?: string
@@ -288,7 +362,7 @@ export type Database = {
           achievement_type?: string
           id?: string
           unlocked_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -298,21 +372,21 @@ export type Database = {
           created_at: string
           game_id: string
           id: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           collection_name?: string | null
           created_at?: string
           game_id: string
           id?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           collection_name?: string | null
           created_at?: string
           game_id?: string
           id?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -336,7 +410,7 @@ export type Database = {
           longest_streak: number | null
           streak_days: number | null
           total_time_spent: number | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           chat_messages_sent?: number | null
@@ -349,7 +423,7 @@ export type Database = {
           longest_streak?: number | null
           streak_days?: number | null
           total_time_spent?: number | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           chat_messages_sent?: number | null
@@ -362,7 +436,7 @@ export type Database = {
           longest_streak?: number | null
           streak_days?: number | null
           total_time_spent?: number | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -374,6 +448,10 @@ export type Database = {
       get_game_average_rating: { Args: { game_uuid: string }; Returns: number }
       get_game_rating_count: { Args: { game_uuid: string }; Returns: number }
       increment_views: { Args: { game_id: string }; Returns: undefined }
+      is_username_available: {
+        Args: { check_username: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

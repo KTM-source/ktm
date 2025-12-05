@@ -19,7 +19,12 @@ import ContactUs from "./pages/ContactUs";
 import ReportIssue from "./pages/ReportIssue";
 import Profile from "./pages/Profile";
 import Favorites from "./pages/Favorites";
+import Auth from "./pages/Auth";
+import Account from "./pages/Account";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import { AuthProvider } from "./components/auth/AuthProvider";
 
 const queryClient = new QueryClient();
 
@@ -49,30 +54,36 @@ const App = () => {
   return (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/games" element={<Games />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/categories/:slug" element={<CategoryGames />} />
-            <Route path="/top-games" element={<TopGames />} />
-            <Route path="/recent" element={<RecentGames />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/how-to-download" element={<HowToDownload />} />
-            <Route path="/contact" element={<ContactUs />} />
-            <Route path="/report-issue" element={<ReportIssue />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/favorites" element={<Favorites />} />
-            <Route path="/ktm-admin-panel" element={<Admin />} />
-            {/* Game detail route - matches /game-slug-free-download */}
-            <Route path="/:slug" element={<GameDetails />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/games" element={<Games />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/categories/:slug" element={<CategoryGames />} />
+              <Route path="/top-games" element={<TopGames />} />
+              <Route path="/recent" element={<RecentGames />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/how-to-download" element={<HowToDownload />} />
+              <Route path="/contact" element={<ContactUs />} />
+              <Route path="/report-issue" element={<ReportIssue />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/favorites" element={<Favorites />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/ktm-admin-panel" element={<Admin />} />
+              {/* Game detail route - matches /game-slug-free-download */}
+              <Route path="/:slug" element={<GameDetails />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   </HelmetProvider>
   );
