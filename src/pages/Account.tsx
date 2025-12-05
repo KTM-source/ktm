@@ -255,8 +255,8 @@ const Account = () => {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('حجم الصورة يجب أن يكون أقل من 2 ميجابايت');
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
         return;
       }
       setAvatarFile(file);
