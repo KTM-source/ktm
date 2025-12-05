@@ -9,6 +9,7 @@ import { parseRichText } from "@/components/admin/RichTextEditor";
 import { ScreenshotGallery } from "@/components/games/ScreenshotGallery";
 import { AdditionalFiles } from "@/components/games/AdditionalFiles";
 import { addViewedGame } from "@/hooks/usePersonalizedRecommendations";
+import { GameChatbot } from "@/components/games/GameChatbot";
 import {
   Download,
   Star,
@@ -349,6 +350,19 @@ const GameDetails = () => {
           </section>
         )}
       </div>
+
+      {/* AI Chatbot */}
+      <GameChatbot
+        gameContext={{
+          title: game.title,
+          developer: game.developer,
+          genre: game.genre,
+          category: game.category,
+          size: game.size,
+          version: game.version,
+          description: game.description,
+        }}
+      />
     </Layout>
   );
 };

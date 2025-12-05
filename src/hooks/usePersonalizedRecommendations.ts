@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const VIEWED_GAMES_KEY = "ktm_viewed_games";
@@ -38,6 +38,19 @@ export const addViewedGame = (gameId: string) => {
     // Keep only last N games
     const trimmed = filtered.slice(0, MAX_VIEWED_GAMES);
     localStorage.setItem(VIEWED_GAMES_KEY, JSON.stringify(trimmed));
+    
+    // Dispatch custom event for real-time updates
+    window.dispatchEvent(new CustomEvent('viewedGamesUpdated'));
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
+// Clear viewed games history
+export const clearViewedGames = () => {
+  try {
+    localStorage.removeItem(VIEWED_GAMES_KEY);
+    window.dispatchEvent(new CustomEvent('viewedGamesUpdated'));
   } catch {
     // Ignore localStorage errors
   }
@@ -47,13 +60,30 @@ export const usePersonalizedRecommendations = () => {
   const [recommendations, setRecommendations] = useState<Game[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasViewedGames, setHasViewedGames] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refresh = useCallback(() => {
+    setRefreshKey(prev => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    // Listen for real-time updates
+    const handleUpdate = () => {
+      refresh();
+    };
+
+    window.addEventListener('viewedGamesUpdated', handleUpdate);
+    return () => window.removeEventListener('viewedGamesUpdated', handleUpdate);
+  }, [refresh]);
 
   useEffect(() => {
     const fetchRecommendations = async () => {
+      setIsLoading(true);
       const viewedGameIds = getViewedGames();
       
       if (viewedGameIds.length === 0) {
         setHasViewedGames(false);
+        setRecommendations([]);
         setIsLoading(false);
         return;
       }
@@ -137,8 +167,7 @@ export const usePersonalizedRecommendations = () => {
     };
 
     fetchRecommendations();
-  }, []);
+  }, [refreshKey]);
 
-  return { recommendations, isLoading, hasViewedGames };
+  return { recommendations, isLoading, hasViewedGames, refresh };
 };
-
