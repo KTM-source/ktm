@@ -11,11 +11,11 @@ interface LayoutProps {
 
 export const Layout = ({ children }: LayoutProps) => {
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen bg-background relative flex flex-col">
       <ParticleBackground />
       <AnnouncementBanner />
       <Navbar />
-      <main className="pt-16 relative z-10 pb-20 md:pb-0">{children}</main>
+      <main className="pt-16 relative z-10 pb-20 md:pb-0 flex-1">{children}</main>
       <Footer />
       <QuickActions />
     </div>
