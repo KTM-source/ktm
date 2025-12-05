@@ -1,8 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, X, File, Loader2, Plus, Download } from "lucide-react";
+import { Upload, X, Loader2, Plus, Link as LinkIcon, FileArchive, FileText, File } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export interface AdditionalFile {
   name: string;
@@ -25,6 +27,42 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function getFileIcon(fileName: string) {
+  const ext = fileName.toLowerCase().split('.').pop() || '';
+  const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'];
+  
+  if (archiveExts.includes(ext)) {
+    return <FileArchive className="w-5 h-5 text-amber-500" />;
+  }
+  
+  const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf'];
+  if (docExts.includes(ext)) {
+    return <FileText className="w-5 h-5 text-blue-500" />;
+  }
+  
+  const exeExts = ['exe', 'msi', 'app', 'dmg'];
+  if (exeExts.includes(ext)) {
+    return (
+      <div className="w-5 h-5 bg-gradient-to-br from-primary to-secondary rounded flex items-center justify-center">
+        <span className="text-[8px] font-bold text-white">EXE</span>
+      </div>
+    );
+  }
+  
+  return <File className="w-5 h-5 text-primary" />;
+}
+
+function getFileExtFromUrl(url: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    const ext = pathname.split('.').pop()?.toLowerCase() || '';
+    return ext;
+  } catch {
+    const ext = url.split('.').pop()?.split('?')[0]?.toLowerCase() || '';
+    return ext;
+  }
+}
+
 export function FileUpload({ 
   values = [], 
   onChange, 
@@ -32,6 +70,10 @@ export function FileUpload({
   maxFiles = 10 
 }: FileUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlName, setUrlName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = async (file: File): Promise<AdditionalFile | null> => {
@@ -72,10 +114,7 @@ export function FileUpload({
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
+  const processFiles = async (files: FileList | File[]) => {
     const remainingSlots = maxFiles - values.length;
     if (remainingSlots <= 0) {
       toast.error(`الحد الأقصى ${maxFiles} ملفات`);
@@ -96,8 +135,59 @@ export function FileUpload({
       }
     } finally {
       setIsUploading(false);
-      e.target.value = "";
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await processFiles(files);
+    e.target.value = "";
+  };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processFiles(files);
+    }
+  }, [values, maxFiles, onChange]);
+
+  const handleAddUrl = () => {
+    if (!urlInput.trim()) {
+      toast.error("الرجاء إدخال رابط الملف");
+      return;
+    }
+
+    const ext = getFileExtFromUrl(urlInput);
+    const defaultName = urlName.trim() || `file.${ext || 'zip'}`;
+    
+    const newFile: AdditionalFile = {
+      name: defaultName,
+      url: urlInput.trim(),
+      size: 0, // Unknown size for URL-based files
+    };
+
+    onChange([...values, newFile]);
+    setUrlInput("");
+    setUrlName("");
+    setShowUrlInput(false);
+    toast.success("تم إضافة الرابط");
   };
 
   const handleRemove = async (index: number) => {
@@ -132,11 +222,13 @@ export function FileUpload({
             className="flex items-center gap-3 p-3 glass-card rounded-lg group"
           >
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <File className="w-5 h-5 text-primary" />
+              {getFileIcon(file.name)}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{file.name}</p>
-              <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+              <p className="text-xs text-muted-foreground">
+                {file.size > 0 ? formatFileSize(file.size) : "رابط خارجي"}
+              </p>
             </div>
             <button
               type="button"
@@ -148,30 +240,90 @@ export function FileUpload({
           </div>
         ))}
         
-        {/* Upload Button */}
-        {values.length < maxFiles && (
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className={cn(
-              "w-full p-4 border-2 border-dashed rounded-lg flex items-center justify-center gap-2 transition-all duration-300",
-              "border-border/50 hover:border-primary/50 hover:bg-primary/5",
-              isUploading && "pointer-events-none opacity-50"
-            )}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                <span className="text-sm text-muted-foreground">جاري الرفع...</span>
-              </>
-            ) : (
-              <>
-                <Plus className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">إضافة ملف</span>
-              </>
-            )}
-          </button>
+        {/* URL Input */}
+        {showUrlInput && (
+          <div className="p-4 glass-card rounded-lg space-y-3 animate-fade-in">
+            <Input
+              placeholder="اسم الملف (اختياري)"
+              value={urlName}
+              onChange={(e) => setUrlName(e.target.value)}
+              className="bg-background/50"
+            />
+            <Input
+              placeholder="رابط التحميل المباشر"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              className="bg-background/50"
+              dir="ltr"
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddUrl}
+                className="flex-1"
+              >
+                إضافة
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowUrlInput(false);
+                  setUrlInput("");
+                  setUrlName("");
+                }}
+              >
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        )}
+        
+        {/* Upload Area */}
+        {values.length < maxFiles && !showUrlInput && (
+          <div className="space-y-2">
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "w-full p-6 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 transition-all duration-300 cursor-pointer",
+                isDragging 
+                  ? "border-primary bg-primary/10 scale-[1.02]" 
+                  : "border-border/50 hover:border-primary/50 hover:bg-primary/5",
+                isUploading && "pointer-events-none opacity-50"
+              )}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                  <span className="text-sm text-muted-foreground">جاري الرفع...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className={cn(
+                    "w-8 h-8 transition-colors",
+                    isDragging ? "text-primary" : "text-muted-foreground"
+                  )} />
+                  <span className="text-sm text-muted-foreground">
+                    اسحب الملفات هنا أو اضغط للاختيار
+                  </span>
+                </>
+              )}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setShowUrlInput(true)}
+              className="w-full p-3 border border-border/50 rounded-lg flex items-center justify-center gap-2 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+            >
+              <LinkIcon className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">أو أضف رابط مباشر</span>
+            </button>
+          </div>
         )}
       </div>
 

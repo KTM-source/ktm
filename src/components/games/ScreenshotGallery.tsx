@@ -10,6 +10,7 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [isClosing, setIsClosing] = useState(false);
 
   if (!screenshots || screenshots.length === 0) return null;
 
@@ -28,10 +29,15 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
   const openLightbox = (index: number) => {
     setLightboxIndex(index);
     setLightboxOpen(true);
+    setIsClosing(false);
   };
 
   const closeLightbox = () => {
-    setLightboxOpen(false);
+    setIsClosing(true);
+    setTimeout(() => {
+      setLightboxOpen(false);
+      setIsClosing(false);
+    }, 300);
   };
 
   const lightboxPrev = () => {
@@ -47,8 +53,8 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
   return (
     <>
       <div className="space-y-4">
-        <h3 className="font-display font-bold text-lg flex items-center gap-2">
-          <ZoomIn className="w-5 h-5 text-primary" />
+        <h3 className="font-display font-bold text-xl flex items-center gap-2">
+          <ZoomIn className="w-6 h-6 text-primary" />
           صور من داخل اللعبة
         </h3>
 
@@ -57,23 +63,23 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
           {showNavigation && currentIndex > 0 && (
             <button
               onClick={handlePrev}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-10 h-10 glass-card rounded-full flex items-center justify-center hover:bg-primary/20 transition-all duration-300 hover:scale-110"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-12 h-12 glass-card rounded-full flex items-center justify-center hover:bg-primary/20 transition-all duration-300 hover:scale-110"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-6 h-6" />
             </button>
           )}
           
           {showNavigation && currentIndex < maxIndex && (
             <button
               onClick={handleNext}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-10 h-10 glass-card rounded-full flex items-center justify-center hover:bg-primary/20 transition-all duration-300 hover:scale-110"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 glass-card rounded-full flex items-center justify-center hover:bg-primary/20 transition-all duration-300 hover:scale-110"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-6 h-6" />
             </button>
           )}
 
           {/* Screenshots Grid */}
-          <div className="grid grid-cols-3 gap-3 overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-hidden">
             {visibleScreenshots.map((url, idx) => (
               <button
                 key={currentIndex + idx}
@@ -89,8 +95,8 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="w-12 h-12 glass-card rounded-full flex items-center justify-center">
-                    <ZoomIn className="w-5 h-5 text-primary" />
+                  <div className="w-14 h-14 glass-card rounded-full flex items-center justify-center">
+                    <ZoomIn className="w-6 h-6 text-primary" />
                   </div>
                 </div>
               </button>
@@ -120,7 +126,10 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
       {/* Lightbox */}
       {lightboxOpen && (
         <div 
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center animate-fade-in"
+          className={cn(
+            "fixed inset-0 z-50 bg-black/95 flex items-center justify-center transition-all duration-300",
+            isClosing ? "opacity-0" : "opacity-100 animate-fade-in"
+          )}
           onClick={closeLightbox}
         >
           {/* Close Button */}
@@ -148,7 +157,10 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
 
           {/* Image */}
           <div 
-            className="max-w-[90vw] max-h-[85vh] animate-scale-in"
+            className={cn(
+              "max-w-[90vw] max-h-[85vh] transition-all duration-300",
+              isClosing ? "scale-95 opacity-0" : "scale-100 opacity-100 animate-scale-in"
+            )}
             onClick={(e) => e.stopPropagation()}
           >
             <img
