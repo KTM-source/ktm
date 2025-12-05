@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.game-chat]
 verify_jwt = false
+
+[functions.generate-challenges]
+verify_jwt = false
+
+[functions.check-verification]
+verify_jwt = false

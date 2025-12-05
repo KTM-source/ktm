@@ -41,6 +41,35 @@ export type Database = {
         }
         Relationships: []
       }
+      challenge_completions: {
+        Row: {
+          challenge_id: string | null
+          completed_at: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          challenge_id?: string | null
+          completed_at?: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          challenge_id?: string | null
+          completed_at?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_completions_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "user_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_messages: {
         Row: {
           category: string
@@ -246,6 +275,8 @@ export type Database = {
           created_at: string
           first_name: string
           id: string
+          is_permanently_verified: boolean | null
+          is_verified: boolean | null
           last_name: string | null
           last_username_change: string | null
           totp_enabled: boolean | null
@@ -253,12 +284,15 @@ export type Database = {
           updated_at: string
           user_id: string
           username: string
+          verified_until: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
           first_name: string
           id?: string
+          is_permanently_verified?: boolean | null
+          is_verified?: boolean | null
           last_name?: string | null
           last_username_change?: string | null
           totp_enabled?: boolean | null
@@ -266,12 +300,15 @@ export type Database = {
           updated_at?: string
           user_id: string
           username: string
+          verified_until?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
           first_name?: string
           id?: string
+          is_permanently_verified?: boolean | null
+          is_verified?: boolean | null
           last_name?: string | null
           last_username_change?: string | null
           totp_enabled?: boolean | null
@@ -279,6 +316,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string
+          verified_until?: string | null
         }
         Relationships: []
       }
@@ -365,6 +403,45 @@ export type Database = {
           achievement_type?: string
           id?: string
           unlocked_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_challenges: {
+        Row: {
+          challenge_description: string | null
+          challenge_hash: string
+          challenge_text: string
+          challenge_type: string
+          completed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          is_completed: boolean | null
+          user_id: string | null
+        }
+        Insert: {
+          challenge_description?: string | null
+          challenge_hash: string
+          challenge_text: string
+          challenge_type?: string
+          completed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          is_completed?: boolean | null
+          user_id?: string | null
+        }
+        Update: {
+          challenge_description?: string | null
+          challenge_hash?: string
+          challenge_text?: string
+          challenge_type?: string
+          completed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          is_completed?: boolean | null
           user_id?: string | null
         }
         Relationships: []

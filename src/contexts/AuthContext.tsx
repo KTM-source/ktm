@@ -11,6 +11,9 @@ export interface Profile {
   avatar_url: string | null;
   totp_enabled: boolean | null;
   totp_secret: string | null;
+  is_verified?: boolean | null;
+  is_permanently_verified?: boolean | null;
+  verified_until?: string | null;
   created_at: string;
   updated_at: string;
 }

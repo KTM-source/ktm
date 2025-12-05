@@ -5,8 +5,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserStats } from '@/hooks/useUserStats';
 import { useAchievements, ACHIEVEMENTS } from '@/hooks/useAchievements';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useChallenges } from '@/hooks/useChallenges';
 import { supabase } from '@/integrations/supabase/client';
 import { GameCard } from '@/components/games/GameCard';
+import { DailyChallenges } from '@/components/challenges/DailyChallenges';
+import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { Button } from '@/components/ui/button';
 import { 
   Trophy, Eye, Download, Heart, MessageCircle, 
@@ -24,6 +27,7 @@ interface Game {
   image: string;
   version: string;
   category: string;
+  genre?: string | null;
   size: string;
   rating: number | null;
   views: number;
@@ -36,6 +40,7 @@ const Profile = () => {
   const { stats, isLoading: statsLoading } = useUserStats();
   const { achievements, isLoading: achievementsLoading } = useAchievements();
   const { favorites, isLoading: favoritesLoading } = useFavorites();
+  const { verificationStatus } = useChallenges();
   const [favoriteGames, setFavoriteGames] = useState<Game[]>([]);
 
   useEffect(() => {
@@ -51,7 +56,7 @@ const Profile = () => {
       const gameIds = favorites.map(f => f.game_id);
       const { data } = await supabase
         .from('games')
-        .select('id, title, slug, image, version, category, size, rating, views, created_at')
+        .select('id, title, slug, image, version, category, genre, size, rating, views, created_at')
         .in('id', gameIds);
 
       if (data) setFavoriteGames(data);
@@ -76,6 +81,11 @@ const Profile = () => {
   const totalCount = Object.keys(ACHIEVEMENTS).length;
   const progressPercent = (unlockedCount / totalCount) * 100;
 
+  const isVerified = verificationStatus?.verified || 
+    profile?.is_verified || 
+    profile?.is_permanently_verified || 
+    profile?.username === 'ktm';
+
   if (authLoading) {
     return (
       <Layout>
@@ -94,15 +104,23 @@ const Profile = () => {
           <div className="relative mb-12">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-purple-500/20 to-pink-500/20 blur-3xl -z-10" />
             <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-2xl shadow-primary/30 overflow-hidden">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <User className="w-12 h-12 text-white" />
+              <div className="relative inline-block">
+                <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-2xl shadow-primary/30 overflow-hidden">
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-12 h-12 text-white" />
+                  )}
+                </div>
+                {isVerified && (
+                  <div className="absolute -bottom-1 -right-1">
+                    <VerifiedBadge size="lg" />
+                  </div>
                 )}
               </div>
-              <h1 className="text-4xl font-bold mb-2">
+              <h1 className="text-4xl font-bold mb-2 flex items-center justify-center gap-2">
                 {profile?.first_name} {profile?.last_name || ''}
+                {isVerified && <VerifiedBadge size="md" />}
               </h1>
               <p className="text-muted-foreground mb-4">@{profile?.username}</p>
               
@@ -119,6 +137,11 @@ const Profile = () => {
                 </Button>
               </div>
             </div>
+          </div>
+
+          {/* Daily Challenges Section */}
+          <div className="mb-12">
+            <DailyChallenges />
           </div>
 
           {/* Stats Grid */}

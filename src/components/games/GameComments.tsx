@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { toast } from 'sonner';
 import { MessageSquare, User, Send, Loader2, Trash2, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -17,6 +18,8 @@ interface Comment {
     last_name: string | null;
     avatar_url: string | null;
     username: string;
+    is_verified: boolean;
+    is_permanently_verified: boolean;
   };
 }
 
@@ -44,7 +47,7 @@ export const GameComments = ({ gameId }: GameCommentsProps) => {
         data.map(async (comment) => {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('first_name, last_name, avatar_url, username')
+            .select('first_name, last_name, avatar_url, username, is_verified, is_permanently_verified')
             .eq('user_id', comment.user_id)
             .single();
           
@@ -123,7 +126,12 @@ export const GameComments = ({ gameId }: GameCommentsProps) => {
     if (hours < 24) return `منذ ${hours} ساعة`;
     if (days < 7) return `منذ ${days} يوم`;
     
-    return date.toLocaleDateString('ar-SA');
+    return date.toLocaleDateString('en-GB');
+  };
+
+  const isUserVerified = (commentProfile?: Comment['profile']) => {
+    if (!commentProfile) return false;
+    return commentProfile.is_verified || commentProfile.is_permanently_verified || commentProfile.username === 'ktm';
   };
 
   return (
@@ -146,8 +154,11 @@ export const GameComments = ({ gameId }: GameCommentsProps) => {
                 </div>
               )}
             </div>
-            <span className="font-medium">
+            <span className="font-medium flex items-center gap-1.5">
               {profile?.first_name} {profile?.last_name || ''}
+              {(profile?.is_verified || profile?.is_permanently_verified || profile?.username === 'ktm') && (
+                <VerifiedBadge size="sm" />
+              )}
             </span>
           </div>
           <Textarea
@@ -209,8 +220,11 @@ export const GameComments = ({ gameId }: GameCommentsProps) => {
                     )}
                   </div>
                   <div>
-                    <p className="font-medium">
+                    <p className="font-medium flex items-center gap-1.5">
                       {comment.profile?.first_name || 'مستخدم'} {comment.profile?.last_name || ''}
+                      {isUserVerified(comment.profile) && (
+                        <VerifiedBadge size="sm" />
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground">{formatDate(comment.created_at)}</p>
                   </div>
