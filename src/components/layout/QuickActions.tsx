@@ -2,17 +2,13 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Heart, User, Search, Home, Gamepad2, 
-  ChevronUp, X, LogIn
+  ChevronUp, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFavorites } from '@/hooks/useFavorites';
-import { useAuth } from '@/hooks/useAuth';
 
 export const QuickActions = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const { favorites, isLoggedIn } = useFavorites();
-  const { user } = useAuth();
 
   // Hide on game detail pages to avoid overlap with chatbot
   const isGameDetailPage = location.pathname.match(/^\/[^/]+$/) && 
@@ -21,9 +17,9 @@ export const QuickActions = () => {
 
   const actions = [
     { icon: Home, label: 'الرئيسية', href: '/' },
-    { icon: Heart, label: 'المفضلة', href: '/favorites', badge: isLoggedIn ? favorites.length || undefined : undefined },
+    { icon: Heart, label: 'المفضلة', href: '/favorites' },
     { icon: Gamepad2, label: 'الألعاب', href: '/games' },
-    { icon: User, label: 'ملفي', href: user ? '/profile' : '/auth' },
+    { icon: User, label: 'حسابي', href: '/auth' },
     { icon: Search, label: 'بحث', href: '/games' },
   ];
 
@@ -35,17 +31,12 @@ export const QuickActions = () => {
           <div className="flex items-center justify-around">
             {actions.slice(0, 5).map((action) => (
               <Link
-                key={action.href}
+                key={action.href + action.label}
                 to={action.href}
                 className="flex flex-col items-center gap-1 p-2 text-muted-foreground hover:text-primary transition-colors relative"
               >
                 <action.icon className="w-5 h-5" />
                 <span className="text-[10px]">{action.label}</span>
-                {action.badge && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                    {action.badge > 9 ? '9+' : action.badge}
-                  </span>
-                )}
               </Link>
             ))}
           </div>
@@ -61,7 +52,7 @@ export const QuickActions = () => {
           )}>
             {actions.map((action, i) => (
               <Link
-                key={action.href}
+                key={action.href + action.label}
                 to={action.href}
                 className={cn(
                   'p-3 rounded-full bg-card/90 backdrop-blur-sm border border-border/50 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all duration-300 hover:scale-110 relative',
@@ -70,11 +61,6 @@ export const QuickActions = () => {
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 <action.icon className="w-5 h-5" />
-                {action.badge && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                    {action.badge > 9 ? '9+' : action.badge}
-                  </span>
-                )}
               </Link>
             ))}
           </div>

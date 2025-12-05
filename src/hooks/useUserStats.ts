@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { getUserId } from './useUserId';
 
 interface UserStats {
   id: string;
@@ -17,34 +17,28 @@ interface UserStats {
 }
 
 export const useUserStats = () => {
-  const { user } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
-    if (!user?.id) {
-      setStats(null);
-      setIsLoading(false);
-      return;
-    }
+    const userId = getUserId();
+    if (!userId) return;
 
     const { data, error } = await supabase
       .from('user_stats')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single();
 
     if (error && error.code === 'PGRST116') {
-      // Create new stats record
       const { data: newData } = await supabase
         .from('user_stats')
-        .insert({ user_id: user.id })
+        .insert({ user_id: userId })
         .select()
         .single();
       
       if (newData) setStats(newData);
     } else if (data) {
-      // Update last visit and streak
       const lastVisit = new Date(data.last_visit);
       const now = new Date();
       const diffDays = Math.floor((now.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
@@ -69,27 +63,28 @@ export const useUserStats = () => {
             streak_days: newStreakDays,
             longest_streak: newLongestStreak
           })
-          .eq('user_id', user.id);
+          .eq('user_id', userId);
       }
 
       setStats({ ...data, streak_days: newStreakDays, longest_streak: newLongestStreak });
     }
     setIsLoading(false);
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
   const incrementStat = async (stat: 'games_viewed' | 'games_downloaded' | 'favorites_count' | 'chat_messages_sent') => {
-    if (!user?.id || !stats) return;
+    const userId = getUserId();
+    if (!userId || !stats) return;
 
     const newValue = (stats[stat] || 0) + 1;
     
     await supabase
       .from('user_stats')
       .update({ [stat]: newValue })
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     setStats(prev => prev ? { ...prev, [stat]: newValue } : null);
   };

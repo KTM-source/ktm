@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Search, Menu, X, Gamepad2, Home, Grid3X3, TrendingUp, Clock, List, ChevronDown } from "lucide-react";
+import { Search, Menu, X, Gamepad2, Home, Grid3X3, TrendingUp, Clock, List, ChevronDown, User, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGames } from "@/hooks/useGames";
+import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
@@ -19,6 +20,7 @@ export const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { categories } = useGames();
+  const { user, profile, loading } = useAuth();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -128,25 +130,80 @@ export const Navbar = () => {
             </div>
           </div>
 
-          {/* Search Bar */}
-          <form onSubmit={handleSearch} className="hidden lg:flex items-center relative">
-            <Search className="absolute left-3 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search games..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input w-64 pl-10"
-            />
-          </form>
+          {/* Search Bar + Account */}
+          <div className="hidden lg:flex items-center gap-4">
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search games..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input w-64 pl-10"
+              />
+            </form>
+
+            {/* Account Button */}
+            {!loading && (
+              user ? (
+                <Link
+                  to="/account"
+                  className="flex items-center gap-2 p-1.5 rounded-full hover:bg-muted/50 transition-colors group"
+                >
+                  <div className="w-9 h-9 rounded-full bg-primary/20 border-2 border-primary/50 overflow-hidden flex items-center justify-center group-hover:border-primary transition-colors">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-5 h-5 text-primary" />
+                    )}
+                  </div>
+                </Link>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Login
+                </Link>
+              )
+            )}
+          </div>
 
           {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-muted/50 transition-colors"
-          >
-            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          <div className="flex items-center gap-2 md:hidden">
+            {/* Mobile Account */}
+            {!loading && (
+              user ? (
+                <Link
+                  to="/account"
+                  className="p-1.5 rounded-full hover:bg-muted/50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/20 border-2 border-primary/50 overflow-hidden flex items-center justify-center">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-4 h-4 text-primary" />
+                    )}
+                  </div>
+                </Link>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="p-2 rounded-lg bg-primary text-primary-foreground"
+                >
+                  <LogIn className="w-5 h-5" />
+                </Link>
+              )
+            )}
+            
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
 
         {/* Mobile Navigation */}

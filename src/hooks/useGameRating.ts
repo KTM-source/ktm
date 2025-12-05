@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { getUserId } from './useUserId';
 import { toast } from 'sonner';
 
 interface RatingInfo {
@@ -10,7 +10,6 @@ interface RatingInfo {
 }
 
 export const useGameRating = (gameId: string) => {
-  const { user } = useAuth();
   const [ratingInfo, setRatingInfo] = useState<RatingInfo>({
     userRating: null,
     averageRating: 0,
@@ -20,14 +19,15 @@ export const useGameRating = (gameId: string) => {
 
   const fetchRating = useCallback(async () => {
     if (!gameId) return;
+    
+    const userId = getUserId();
 
-    // Fetch user's rating
-    if (user?.id) {
+    if (userId) {
       const { data: userRating } = await supabase
         .from('game_ratings')
         .select('rating')
         .eq('game_id', gameId)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
 
       if (userRating) {
@@ -35,7 +35,6 @@ export const useGameRating = (gameId: string) => {
       }
     }
 
-    // Fetch average rating
     const { data: ratings } = await supabase
       .from('game_ratings')
       .select('rating')
@@ -51,24 +50,20 @@ export const useGameRating = (gameId: string) => {
     }
 
     setIsLoading(false);
-  }, [gameId, user?.id]);
+  }, [gameId]);
 
   useEffect(() => {
     fetchRating();
   }, [fetchRating]);
 
   const submitRating = async (rating: number) => {
-    if (!user?.id) {
-      toast.error('يجب تسجيل الدخول للتقييم');
-      return false;
-    }
-    
-    if (!gameId) return false;
+    const userId = getUserId();
+    if (!userId || !gameId) return false;
 
     const { error } = await supabase
       .from('game_ratings')
       .upsert({
-        user_id: user.id,
+        user_id: userId,
         game_id: gameId,
         rating
       }, {
@@ -89,7 +84,6 @@ export const useGameRating = (gameId: string) => {
     ...ratingInfo,
     isLoading,
     submitRating,
-    refetch: fetchRating,
-    isLoggedIn: !!user
+    refetch: fetchRating
   };
 };

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { getUserId } from './useUserId';
 import { toast } from 'sonner';
 
 interface Achievement {
@@ -29,48 +29,44 @@ export const ACHIEVEMENTS = {
 };
 
 export const useAchievements = () => {
-  const { user } = useAuth();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
 
   const fetchAchievements = useCallback(async () => {
-    if (!user?.id) {
-      setAchievements([]);
-      setIsLoading(false);
-      return;
-    }
+    const userId = getUserId();
+    if (!userId) return;
 
     const { data, error } = await supabase
       .from('user_achievements')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('unlocked_at', { ascending: false });
 
     if (!error && data) {
       setAchievements(data);
     }
     setIsLoading(false);
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     fetchAchievements();
   }, [fetchAchievements]);
 
   const unlockAchievement = async (type: keyof typeof ACHIEVEMENTS) => {
-    if (!user?.id) return false;
+    const userId = getUserId();
+    if (!userId) return false;
 
     const achievement = ACHIEVEMENTS[type];
     if (!achievement) return false;
 
-    // Check if already unlocked
     const exists = achievements.some(a => a.achievement_type === type);
     if (exists) return false;
 
     const { data, error } = await supabase
       .from('user_achievements')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         achievement_type: type,
         achievement_name: achievement.name,
         achievement_icon: achievement.icon
@@ -87,8 +83,6 @@ export const useAchievements = () => {
         duration: 5000,
       });
       fetchAchievements();
-      
-      // Clear new achievement after animation
       setTimeout(() => setNewAchievement(null), 5000);
     }
 
