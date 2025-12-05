@@ -205,13 +205,13 @@ export const GameChatbot = ({ gameContext }: GameChatbotProps) => {
       {/* Chat Window */}
       <div
         className={cn(
-          "fixed bottom-6 left-6 z-50 w-[380px] max-w-[calc(100vw-48px)]",
+          "fixed bottom-6 left-6 z-50 w-[440px] max-w-[calc(100vw-48px)]",
           "bg-background/95 backdrop-blur-xl border border-border/50",
           "rounded-2xl shadow-2xl shadow-primary/20",
           "transition-all duration-500 ease-out",
           "flex flex-col",
           isOpen
-            ? "opacity-100 translate-y-0 scale-100 h-[500px]"
+            ? "opacity-100 translate-y-0 scale-100 h-[580px]"
             : "opacity-0 translate-y-8 scale-95 h-0 pointer-events-none"
         )}
       >
