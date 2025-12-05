@@ -188,26 +188,66 @@ export function useGame(slug: string) {
     if (!error && data) {
       setGame(data as unknown as Game);
       
-      // Fetch related games based on genre
-      const gameGenres = data.genre?.toLowerCase().split(",").map((g: string) => g.trim()) || [data.category];
-      
-      const { data: related } = await supabase
-        .from("games")
-        .select("*")
-        .neq("id", data.id)
-        .limit(12);
-      
-      if (related) {
-        // Filter related games by matching genres
-        const filteredRelated = related.filter((r: any) => {
-          const relatedGenres = r.genre?.toLowerCase().split(",").map((g: string) => g.trim()) || [r.category];
-          return relatedGenres.some((rg: string) => gameGenres.includes(rg));
-        }).slice(0, 6);
-        
-        setRelatedGames(filteredRelated as unknown as Game[]);
-      }
+      // Fetch AI-powered similar games
+      fetchSimilarGames(data);
     }
     setIsLoading(false);
+  };
+
+  const fetchSimilarGames = async (gameData: any) => {
+    try {
+      console.log("Fetching AI-powered similar games for:", gameData.title);
+      
+      const response = await supabase.functions.invoke('find-similar-games', {
+        body: {
+          gameId: gameData.id,
+          gameTitle: gameData.title,
+          gameGenre: gameData.genre,
+          gameCategory: gameData.category,
+          gameDescription: gameData.description
+        }
+      });
+
+      if (response.error) {
+        console.error("Error fetching similar games:", response.error);
+        // Fallback to basic matching
+        fallbackSimilarGames(gameData);
+        return;
+      }
+
+      const { similarGames } = response.data || {};
+      
+      if (similarGames && similarGames.length > 0) {
+        console.log("AI found", similarGames.length, "similar games");
+        setRelatedGames(similarGames as Game[]);
+      } else {
+        // Fallback to basic matching
+        fallbackSimilarGames(gameData);
+      }
+    } catch (error) {
+      console.error("Error in fetchSimilarGames:", error);
+      fallbackSimilarGames(gameData);
+    }
+  };
+
+  const fallbackSimilarGames = async (gameData: any) => {
+    console.log("Using fallback genre matching");
+    const gameGenres = gameData.genre?.toLowerCase().split(",").map((g: string) => g.trim()) || [gameData.category];
+    
+    const { data: related } = await supabase
+      .from("games")
+      .select("*")
+      .neq("id", gameData.id)
+      .limit(12);
+    
+    if (related) {
+      const filteredRelated = related.filter((r: any) => {
+        const relatedGenres = r.genre?.toLowerCase().split(",").map((g: string) => g.trim()) || [r.category];
+        return relatedGenres.some((rg: string) => gameGenres.includes(rg));
+      }).slice(0, 6);
+      
+      setRelatedGames(filteredRelated as unknown as Game[]);
+    }
   };
 
   return { game, relatedGames, isLoading };
