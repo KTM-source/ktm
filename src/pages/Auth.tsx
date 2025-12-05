@@ -55,6 +55,8 @@ const Auth = () => {
   const [show2FALogin, setShow2FALogin] = useState(false);
   const [loginTotpSecret, setLoginTotpSecret] = useState('');
   const [loginOtpCode, setLoginOtpCode] = useState('');
+  const [pendingLoginEmail, setPendingLoginEmail] = useState('');
+  const [pendingLoginPassword, setPendingLoginPassword] = useState('');
 
   useEffect(() => {
     if (user && !show2FASetup && !show2FALogin) {
@@ -112,11 +114,13 @@ const Auth = () => {
           return;
         }
 
-        const { error, needsTOTP, totpSecret } = await signIn(email, password);
+        const { error, needsTOTP, totpSecret, userEmail, userPassword } = await signIn(email, password);
         if (error) {
           toast.error(error.message);
         } else if (needsTOTP && totpSecret) {
           setLoginTotpSecret(totpSecret);
+          setPendingLoginEmail(userEmail || email);
+          setPendingLoginPassword(userPassword || password);
           setShow2FALogin(true);
         } else {
           toast.success('تم تسجيل الدخول بنجاح');
@@ -193,23 +197,34 @@ const Auth = () => {
     const isValid = verifyTOTP(loginOtpCode, loginTotpSecret);
     
     if (isValid) {
-      toast.success('تم تسجيل الدخول بنجاح!');
-      setShow2FALogin(false);
-      navigate('/');
+      // Re-sign in now that TOTP is verified
+      const { error } = await supabase.auth.signInWithPassword({
+        email: pendingLoginEmail,
+        password: pendingLoginPassword,
+      });
+      
+      if (error) {
+        toast.error('حدث خطأ في تسجيل الدخول');
+      } else {
+        toast.success('تم تسجيل الدخول بنجاح!');
+        setShow2FALogin(false);
+        setPendingLoginEmail('');
+        setPendingLoginPassword('');
+        navigate('/');
+      }
     } else {
       toast.error('الرمز غير صحيح، يرجى المحاولة مرة أخرى');
-      // Sign out the user since TOTP verification failed
-      await supabase.auth.signOut();
     }
     
     setLoading(false);
   };
 
   const handleCancel2FALogin = async () => {
-    await supabase.auth.signOut();
     setShow2FALogin(false);
     setLoginOtpCode('');
     setLoginTotpSecret('');
+    setPendingLoginEmail('');
+    setPendingLoginPassword('');
   };
 
   if (show2FASetup) {

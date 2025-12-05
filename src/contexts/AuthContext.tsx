@@ -21,7 +21,7 @@ export interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signUp: (email: string, password: string, username: string, firstName: string, lastName?: string) => Promise<{ error: any; userId?: string }>;
-  signIn: (email: string, password: string) => Promise<{ error: any; needsTOTP?: boolean; totpSecret?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error: any; needsTOTP?: boolean; totpSecret?: string; userEmail?: string; userPassword?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
   updatePassword: (newPassword: string) => Promise<{ error: any }>;
@@ -155,11 +155,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (data.user) {
       const profileData = await fetchProfile(data.user.id);
-      setProfile(profileData);
       
       if (profileData?.totp_enabled && profileData?.totp_secret) {
-        return { error: null, needsTOTP: true, totpSecret: profileData.totp_secret };
+        // Sign out immediately - user must complete 2FA first
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+        return { error: null, needsTOTP: true, totpSecret: profileData.totp_secret, userEmail: email, userPassword: password };
       }
+      
+      setProfile(profileData);
     }
 
     return { error: null };
