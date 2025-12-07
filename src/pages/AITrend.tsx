@@ -669,7 +669,7 @@ const useIsMobile = () => {
 export default function AITrend() {
   const navigate = useNavigate();
   const { conversationId } = useParams();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const isMobile = useIsMobile();
   
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1290,7 +1290,8 @@ https://images.igdb.com/igdb/image/upload/t_cover_big/[IMAGE_ID].jpg
     index === self.findIndex(g => g.name.toLowerCase() === game.name.toLowerCase())
   );
 
-  if (isCheckingAuth) {
+  // Show loading while checking auth or loading user
+  if (isCheckingAuth || authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0d1117] to-[#0a0a0f] flex items-center justify-center">
         <div className="relative">
