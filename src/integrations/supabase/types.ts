@@ -409,6 +409,44 @@ export type Database = {
         }
         Relationships: []
       }
+      published_websites: {
+        Row: {
+          created_at: string
+          files: Json
+          id: string
+          project_id: string
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          files?: Json
+          id?: string
+          project_id: string
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          files?: Json
+          id?: string
+          project_id?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "published_websites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "coding_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reports: {
         Row: {
           created_at: string
@@ -618,6 +656,10 @@ export type Database = {
       get_game_rating_count: { Args: { game_uuid: string }; Returns: number }
       increment_views: { Args: { game_id: string }; Returns: undefined }
       is_username_available: {
+        Args: { check_username: string }
+        Returns: boolean
+      }
+      is_website_username_available: {
         Args: { check_username: string }
         Returns: boolean
       }

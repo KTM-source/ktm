@@ -25,7 +25,9 @@ import Account from "./pages/Account";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import AITrend from "./pages/AITrend";
-import AICoding from "./pages/AICoding";
+import AICodingHome from "./pages/AICodingHome";
+import AICodingProject from "./pages/AICodingProject";
+import PublishedWebsite from "./pages/PublishedWebsite";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -81,7 +83,11 @@ const App = () => {
                 <Route path="/ktm-admin-panel" element={<Admin />} />
                 <Route path="/ktm/ai/trend" element={<AITrend />} />
                 <Route path="/ktm/ai/trend/:conversationId" element={<AITrend />} />
-                <Route path="/ktm/ai/coding" element={<AICoding />} />
+                <Route path="/ktm/ai/coding" element={<AICodingHome />} />
+                <Route path="/ktm/ai/coding/:projectId" element={<AICodingProject />} />
+                {/* Published Websites */}
+                <Route path="/website/:username" element={<PublishedWebsite />} />
+                <Route path="/website/:username/:page" element={<PublishedWebsite />} />
                 {/* Game detail route - matches /game-slug-free-download */}
                 <Route path="/:slug" element={<GameDetails />} />
                 <Route path="*" element={<NotFound />} />
