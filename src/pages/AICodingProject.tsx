@@ -8,6 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import JSZip from "jszip";
+import Prism from "prismjs";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-markup";
 import { 
   Send, 
   Loader2, 
@@ -15,7 +21,6 @@ import {
   Eye, 
   FileCode, 
   Plus, 
-  Trash2,
   Download,
   Copy,
   Check,
@@ -34,7 +39,6 @@ import {
   RefreshCw,
   FileArchive,
   Globe,
-  ChevronDown,
   ChevronRight,
   Folder,
   Upload,
@@ -89,7 +93,7 @@ interface DuplicateFile {
   selected: boolean;
 }
 
-// Animation styles
+// Animation styles + Prism theme
 const animationStyles = `
   @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
   @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); } 50% { box-shadow: 0 0 40px rgba(16, 185, 129, 0.6); } }
@@ -99,21 +103,27 @@ const animationStyles = `
   @keyframes line-highlight { 0%, 100% { background-color: rgba(16, 185, 129, 0.15); } 50% { background-color: rgba(16, 185, 129, 0.3); } }
   @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   @keyframes typing-cursor { 0%, 100% { border-color: #10b981; } 50% { border-color: transparent; } }
-  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
   
   .animate-shimmer { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); background-size: 200% 100%; animation: shimmer 2s infinite; }
   .animate-pulse-glow { animation: pulse-glow 2s infinite; }
   .animate-float { animation: float 3s ease-in-out infinite; }
   .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
-  .typing-animation span { display: inline-block; animation: typing-dot 1.4s infinite; }
-  .typing-animation span:nth-child(2) { animation-delay: 0.2s; }
-  .typing-animation span:nth-child(3) { animation-delay: 0.4s; }
   .line-editing { animation: line-highlight 1s ease-in-out infinite; border-left: 3px solid #10b981 !important; }
-  .editing-cursor { animation: blink 0.8s infinite; }
-  .typing-cursor-line { animation: typing-cursor 0.8s infinite; border-left: 2px solid #10b981; }
-  .animate-shake { animation: shake 0.3s ease-in-out; }
-  
   .drop-zone-active { border-color: #10b981 !important; background-color: rgba(16, 185, 129, 0.1) !important; }
+  
+  /* Prism Theme - One Dark */
+  .code-editor { font-family: 'Fira Code', 'Monaco', 'Consolas', monospace; font-size: 14px; line-height: 1.6; tab-size: 2; }
+  .code-editor .token.comment, .code-editor .token.prolog, .code-editor .token.doctype, .code-editor .token.cdata { color: #5c6370; font-style: italic; }
+  .code-editor .token.punctuation { color: #abb2bf; }
+  .code-editor .token.property, .code-editor .token.tag, .code-editor .token.boolean, .code-editor .token.number, .code-editor .token.constant, .code-editor .token.symbol { color: #d19a66; }
+  .code-editor .token.selector, .code-editor .token.attr-name, .code-editor .token.string, .code-editor .token.char, .code-editor .token.builtin { color: #98c379; }
+  .code-editor .token.operator, .code-editor .token.entity, .code-editor .token.url { color: #56b6c2; }
+  .code-editor .token.atrule, .code-editor .token.attr-value, .code-editor .token.keyword { color: #c678dd; }
+  .code-editor .token.function { color: #61afef; }
+  .code-editor .token.regex, .code-editor .token.important, .code-editor .token.variable { color: #e06c75; }
+  .code-editor .token.tag .token.tag { color: #e06c75; }
+  .code-editor .token.tag .token.attr-name { color: #d19a66; }
+  .code-editor .token.tag .token.attr-value { color: #98c379; }
 `;
 
 // Generate suggestions based on context
@@ -143,6 +153,31 @@ const getLanguageFromExtension = (filename: string): string => {
     case 'md': return 'markdown';
     case 'txt': return 'text';
     default: return 'text';
+  }
+};
+
+// Get Prism language
+const getPrismLanguage = (language: string): string => {
+  switch (language) {
+    case 'html': return 'markup';
+    case 'css': return 'css';
+    case 'javascript': case 'js': return 'javascript';
+    case 'typescript': case 'ts': return 'typescript';
+    case 'json': return 'json';
+    default: return 'markup';
+  }
+};
+
+// Syntax highlight code
+const highlightCode = (code: string, language: string): string => {
+  try {
+    const prismLang = getPrismLanguage(language);
+    if (Prism.languages[prismLang]) {
+      return Prism.highlight(code, Prism.languages[prismLang], prismLang);
+    }
+    return code;
+  } catch {
+    return code;
   }
 };
 
@@ -189,7 +224,8 @@ const AICodingProject = () => {
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const codeRef = useRef<HTMLTextAreaElement>(null);
+  const codeEditorRef = useRef<HTMLPreElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeFile = files[activeFileIndex];
@@ -200,6 +236,27 @@ const AICodingProject = () => {
       loadProject();
     }
   }, [projectId, user]);
+
+  // Load saved messages from localStorage
+  useEffect(() => {
+    if (projectId) {
+      const savedMessages = localStorage.getItem(`project_messages_${projectId}`);
+      if (savedMessages) {
+        try {
+          const parsed = JSON.parse(savedMessages);
+          setMessages(parsed.filter((m: Message) => !m.isThinking));
+        } catch {}
+      }
+    }
+  }, [projectId]);
+
+  // Save messages to localStorage
+  useEffect(() => {
+    if (projectId && messages.length > 0) {
+      const toSave = messages.filter(m => !m.isThinking);
+      localStorage.setItem(`project_messages_${projectId}`, JSON.stringify(toSave));
+    }
+  }, [messages, projectId]);
 
   // Update suggestions
   useEffect(() => {
@@ -250,7 +307,8 @@ const AICodingProject = () => {
     }
     
     setProjectName(data.name);
-    setFiles((data.files as unknown as CodeFile[]) || []);
+    const loadedFiles = (data.files as unknown as CodeFile[]) || [];
+    setFiles(loadedFiles.length > 0 ? loadedFiles : [{ name: "index.html", content: `<!DOCTYPE html>\n<html lang="ar" dir="rtl">\n<head>\n    <meta charset="UTF-8">\n    <title>صفحتي</title>\n</head>\n<body>\n    <h1>مرحباً!</h1>\n</body>\n</html>`, language: "html" }]);
     
     // Check if published
     const { data: publishedData } = await supabase
@@ -264,14 +322,14 @@ const AICodingProject = () => {
     }
   };
 
-  // Save project
-  const saveProject = async () => {
+  // Save project with current files
+  const saveProjectWithFiles = async (filesToSave: CodeFile[]) => {
     if (!user || !projectId) return;
     setIsSaving(true);
     
     const { error } = await supabase
       .from("coding_projects")
-      .update({ name: projectName, files: JSON.parse(JSON.stringify(files)), updated_at: new Date().toISOString() })
+      .update({ name: projectName, files: JSON.parse(JSON.stringify(filesToSave)), updated_at: new Date().toISOString() })
       .eq("id", projectId);
     
     if (error) {
@@ -280,6 +338,11 @@ const AICodingProject = () => {
       toast({ title: "تم الحفظ" });
     }
     setIsSaving(false);
+  };
+
+  // Save project
+  const saveProject = async () => {
+    await saveProjectWithFiles(files);
   };
 
   // Get preview HTML
@@ -301,19 +364,28 @@ const AICodingProject = () => {
     return html;
   };
 
+  // Add new file - returns updated files array
+  const addNewFileAndGetUpdated = (currentFiles: CodeFile[], fileName: string, content: string = "", language: string = "html"): CodeFile[] => {
+    if (!fileName.trim()) return currentFiles;
+    const existingIndex = currentFiles.findIndex(f => f.name === fileName);
+    if (existingIndex !== -1) {
+      const newFiles = [...currentFiles];
+      newFiles[existingIndex] = { ...newFiles[existingIndex], content };
+      return newFiles;
+    } else {
+      return [...currentFiles, { name: fileName, content, language }];
+    }
+  };
+
   // Add new file
   const addNewFile = (fileName: string, content: string = "", language: string = "html") => {
     if (!fileName.trim()) return;
-    const existingIndex = files.findIndex(f => f.name === fileName);
-    if (existingIndex !== -1) {
-      const newFiles = [...files];
-      newFiles[existingIndex].content = content;
-      setFiles(newFiles);
-      setActiveFileIndex(existingIndex);
-    } else {
-      setFiles(prev => [...prev, { name: fileName, content, language }]);
-      setActiveFileIndex(files.length);
-    }
+    setFiles(prev => {
+      const newFiles = addNewFileAndGetUpdated(prev, fileName, content, language);
+      const newIndex = newFiles.findIndex(f => f.name === fileName);
+      if (newIndex !== -1) setActiveFileIndex(newIndex);
+      return newFiles;
+    });
     setEditsCount(prev => prev + 1);
     setShowNewFileDialog(false);
     setNewFileName("");
@@ -374,7 +446,6 @@ const AICodingProject = () => {
 
     for (const file of uploadedFiles) {
       if (file.name.endsWith('.zip')) {
-        // Handle ZIP file
         try {
           const zip = await JSZip.loadAsync(file);
           const zipFiles = Object.keys(zip.files);
@@ -398,7 +469,6 @@ const AICodingProject = () => {
           toast({ title: "فشل في قراءة ملف ZIP", variant: "destructive" });
         }
       } else {
-        // Handle regular file
         try {
           const content = await file.text();
           const language = getLanguageFromExtension(file.name);
@@ -415,13 +485,11 @@ const AICodingProject = () => {
       }
     }
 
-    // Add non-duplicate files immediately
     if (newFilesToAdd.length > 0) {
       setFiles(prev => [...prev, ...newFilesToAdd]);
       toast({ title: `تم إضافة ${newFilesToAdd.length} ملف` });
     }
 
-    // Show duplicate dialog if there are duplicates
     if (duplicatesToCheck.length > 0) {
       setDuplicateFiles(duplicatesToCheck);
       setShowDuplicateDialog(true);
@@ -454,11 +522,8 @@ const AICodingProject = () => {
     if (!user || !projectId || !publishUsername.trim() || !isUsernameAvailable) return;
     
     setIsPublishing(true);
-    
-    // First save the project
     await saveProject();
     
-    // Check if already published
     const { data: existingPublish } = await supabase
       .from("published_websites")
       .select("id")
@@ -466,7 +531,6 @@ const AICodingProject = () => {
       .single();
     
     if (existingPublish) {
-      // Update existing
       const { error } = await supabase
         .from("published_websites")
         .update({ username: publishUsername.toLowerCase(), files: JSON.parse(JSON.stringify(files)), updated_at: new Date().toISOString() })
@@ -478,7 +542,6 @@ const AICodingProject = () => {
         return;
       }
     } else {
-      // Create new
       const { error } = await supabase
         .from("published_websites")
         .insert([{ project_id: projectId, user_id: user.id, username: publishUsername.toLowerCase(), files: JSON.parse(JSON.stringify(files)) }]);
@@ -586,7 +649,6 @@ const AICodingProject = () => {
               fullContent += content;
               lineCount += (content.match(/\n/g) || []).length;
               
-              // Update live edit content
               setLiveEditContent(fullContent);
               
               const fileMatch = fullContent.match(/```(\w+)?:?([^\n]*)\n/);
@@ -597,7 +659,6 @@ const AICodingProject = () => {
                 setEditingLine(lineCount);
               }
               
-              // Update streaming message
               setMessages(prev => {
                 const lastIndex = prev.length - 1;
                 if (prev[lastIndex]?.isThinking) {
@@ -615,14 +676,23 @@ const AICodingProject = () => {
       setMessages(prev => prev.filter(m => !m.isThinking));
       const { message, files: newFiles } = parseAIResponse(fullContent);
 
+      // Update files with new files from AI
+      let updatedFiles = [...files];
       for (let i = 0; i < newFiles.length; i++) {
         const file = newFiles[i];
         setCurrentAction({ type: "editing", file: file.name });
         setEditingFile(file.name);
         await new Promise(resolve => setTimeout(resolve, 100));
-        addNewFile(file.name, file.content, file.language);
-        await new Promise(resolve => setTimeout(resolve, 50));
+        updatedFiles = addNewFileAndGetUpdated(updatedFiles, file.name, file.content, file.language);
       }
+      
+      // Update state with all new files at once
+      setFiles(updatedFiles);
+      if (newFiles.length > 0) {
+        const lastFileIndex = updatedFiles.findIndex(f => f.name === newFiles[newFiles.length - 1].name);
+        if (lastFileIndex !== -1) setActiveFileIndex(lastFileIndex);
+      }
+      setEditsCount(newFiles.length);
 
       setEditingFile(null);
       setEditingLine(null);
@@ -631,9 +701,9 @@ const AICodingProject = () => {
       setCurrentAction({ type: "done" });
       setTimeout(() => setCurrentAction(null), 2000);
 
-      // Auto-save
-      if (projectId && user) {
-        await supabase.from("coding_projects").update({ files: JSON.parse(JSON.stringify(files)), updated_at: new Date().toISOString() }).eq("id", projectId);
+      // Auto-save with the updated files
+      if (projectId && user && updatedFiles.length > 0) {
+        await saveProjectWithFiles(updatedFiles);
       }
 
     } catch (error) {
@@ -654,7 +724,7 @@ const AICodingProject = () => {
   const handleCodeChange = (newContent: string) => {
     if (isAIEditing) return;
     const newFiles = [...files];
-    newFiles[activeFileIndex].content = newContent;
+    newFiles[activeFileIndex] = { ...newFiles[activeFileIndex], content: newContent };
     setFiles(newFiles);
   };
 
@@ -672,15 +742,6 @@ const AICodingProject = () => {
     if (name.endsWith('.css')) return '🎨';
     if (name.endsWith('.js')) return '⚡';
     return '📄';
-  };
-
-  // Get live editing content for display
-  const getLiveEditingDisplay = () => {
-    if (!liveEditContent || !editingFile) return null;
-    
-    // Extract current file content from streaming
-    const match = liveEditContent.match(new RegExp(`\`\`\`\\w*:?${editingFile}?[^\\n]*\\n([\\s\\S]*?)(?:\`\`\`|$)`));
-    return match ? match[1] : liveEditContent.split('\n').slice(-20).join('\n');
   };
 
   // Loading state
@@ -708,10 +769,7 @@ const AICodingProject = () => {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg animate-pulse-glow">
                 <Code2 className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="bg-transparent border-none text-lg font-bold text-white p-0 h-auto focus-visible:ring-0 w-48" />
-                <p className="text-xs text-gray-500">GPT-5 Powered</p>
-              </div>
+              <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="bg-transparent border-none text-lg font-bold text-white p-0 h-auto focus-visible:ring-0 w-48" />
             </div>
           </div>
           
@@ -756,8 +814,8 @@ const AICodingProject = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Chat Panel - Wider */}
-        <div className="w-[400px] border-r border-white/10 flex flex-col bg-[#1e1e1e]">
+        {/* Chat Panel */}
+        <div className="w-[420px] border-r border-white/10 flex flex-col bg-[#1e1e1e]">
           <div className="p-4 border-b border-white/10 bg-[#252525]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
@@ -880,7 +938,6 @@ const AICodingProject = () => {
           </div>
 
           <div className="flex-1 flex overflow-hidden">
-            {/* Code View with File Sidebar */}
             {showCodeView ? (
               <div 
                 className={cn("flex-1 flex", isDragging && "drop-zone-active")}
@@ -888,7 +945,7 @@ const AICodingProject = () => {
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleFileDrop}
               >
-                {/* File Sidebar inside Code tab */}
+                {/* File Sidebar */}
                 <div className={cn("border-r border-white/10 bg-[#1e1e1e] flex flex-col transition-all", sidebarOpen ? "w-52" : "w-12")}>
                   <div className="p-2 border-b border-white/10 flex items-center justify-between">
                     <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white h-8 w-8">
@@ -926,9 +983,8 @@ const AICodingProject = () => {
                   </ScrollArea>
                 </div>
 
-                {/* Code Editor */}
+                {/* Code Editor with Syntax Highlighting */}
                 <div className="flex-1 bg-[#1a1a1a] overflow-auto relative">
-                  {/* Drag overlay */}
                   {isDragging && (
                     <div className="absolute inset-0 bg-emerald-500/10 border-2 border-dashed border-emerald-500 z-50 flex items-center justify-center">
                       <div className="text-center animate-pulse">
@@ -945,25 +1001,35 @@ const AICodingProject = () => {
                     {isAIEditing && editingFile === activeFile?.name && (
                       <span className="text-xs text-amber-400 animate-pulse flex items-center gap-1">
                         <Pencil className="w-3 h-3" />يُحرَّر...
-                        {editingLine && <span className="text-gray-500">سطر {editingLine}</span>}
                       </span>
                     )}
                   </div>
                   
-                  <div className="relative">
+                  <div className="relative min-h-[calc(100vh-180px)]">
+                    {/* Syntax Highlighted Display */}
+                    <pre 
+                      ref={codeEditorRef}
+                      className="code-editor absolute inset-0 p-4 m-0 overflow-auto text-gray-300 pointer-events-none whitespace-pre-wrap break-words"
+                      style={{ background: 'transparent' }}
+                      dangerouslySetInnerHTML={{ 
+                        __html: highlightCode(activeFile?.content || "", activeFile?.language || "html") 
+                      }}
+                    />
+                    
+                    {/* Editable Textarea */}
                     <textarea
-                      ref={codeRef}
-                      value={isAIEditing && editingFile === activeFile?.name && liveEditContent ? (getLiveEditingDisplay() || activeFile?.content || "") : (activeFile?.content || "")}
+                      ref={textareaRef}
+                      value={activeFile?.content || ""}
                       onChange={(e) => handleCodeChange(e.target.value)}
                       disabled={isAIEditing}
                       className={cn(
-                        "w-full min-h-[calc(100vh-180px)] p-4 bg-transparent text-gray-300 font-mono text-sm resize-none focus:outline-none",
-                        isAIEditing && "opacity-70 cursor-not-allowed",
-                        isAIEditing && editingFile === activeFile?.name && "typing-cursor-line"
+                        "code-editor absolute inset-0 w-full h-full p-4 bg-transparent text-transparent caret-emerald-400 resize-none focus:outline-none",
+                        isAIEditing && "cursor-not-allowed"
                       )}
                       spellCheck={false}
-                      style={{ tabSize: 2 }}
+                      style={{ caretColor: '#10b981' }}
                     />
+                    
                     {isAIEditing && editingFile === activeFile?.name && (
                       <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
                         <div className="animate-pulse bg-emerald-500/10 h-6 w-full absolute" style={{ top: `${((editingLine || 1) * 24) + 48}px` }}>
@@ -975,14 +1041,13 @@ const AICodingProject = () => {
                 </div>
               </div>
             ) : (
-              /* Preview */
               <iframe key={previewKey} srcDoc={getPreviewHTML()} className="w-full h-full bg-white" title="Preview" sandbox="allow-scripts allow-same-origin" />
             )}
           </div>
         </div>
       </div>
 
-      {/* New File Dialog */}
+      {/* Dialogs */}
       <Dialog open={showNewFileDialog} onOpenChange={setShowNewFileDialog}>
         <DialogContent className="bg-[#252525] border-white/10">
           <DialogHeader>
@@ -992,13 +1057,12 @@ const AICodingProject = () => {
             <Input value={newFileName} onChange={(e) => setNewFileName(e.target.value)} placeholder="اسم الملف (مثال: page.html)" className="bg-[#1e1e1e] border-white/10 text-white" />
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setShowNewFileDialog(false)} className="flex-1 border-white/10 text-gray-300 hover:bg-white/5">إلغاء</Button>
-              <Button onClick={() => addNewFile(newFileName)} disabled={!newFileName.trim()} className="flex-1 bg-emerald-500 hover:bg-emerald-600">إنشاء</Button>
+              <Button onClick={() => addNewFile(newFileName, "", getLanguageFromExtension(newFileName))} disabled={!newFileName.trim()} className="flex-1 bg-emerald-500 hover:bg-emerald-600">إنشاء</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete File Dialog */}
       <AlertDialog open={showDeleteFileDialog !== null} onOpenChange={() => setShowDeleteFileDialog(null)}>
         <AlertDialogContent className="bg-[#252525] border-white/10">
           <AlertDialogHeader>
@@ -1012,7 +1076,6 @@ const AICodingProject = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Duplicate Files Dialog */}
       <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
         <DialogContent className="bg-[#252525] border-white/10 max-w-md">
           <DialogHeader>
@@ -1021,7 +1084,7 @@ const AICodingProject = () => {
               ملفات موجودة مسبقاً
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              الملفات التالية موجودة بالفعل. اختر الملفات التي تريد استبدالها.
+              اختر الملفات التي تريد استبدالها.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 max-h-64 overflow-auto py-2">
@@ -1030,9 +1093,7 @@ const AICodingProject = () => {
                 key={file.name} 
                 className={cn(
                   "flex items-center gap-3 p-3 rounded-lg border transition-all animate-slide-up",
-                  file.selected 
-                    ? "bg-amber-500/10 border-amber-500/30" 
-                    : "bg-white/5 border-white/10"
+                  file.selected ? "bg-amber-500/10 border-amber-500/30" : "bg-white/5 border-white/10"
                 )}
                 style={{ animationDelay: `${i * 50}ms` }}
               >
@@ -1054,25 +1115,16 @@ const AICodingProject = () => {
             ))}
           </div>
           <div className="flex gap-2 pt-2">
-            <Button 
-              variant="outline" 
-              onClick={() => { setShowDuplicateDialog(false); setDuplicateFiles([]); }} 
-              className="flex-1 border-white/10 text-gray-300 hover:bg-white/5"
-            >
+            <Button variant="outline" onClick={() => { setShowDuplicateDialog(false); setDuplicateFiles([]); }} className="flex-1 border-white/10 text-gray-300 hover:bg-white/5">
               تخطي الكل
             </Button>
-            <Button 
-              onClick={handleDuplicateConfirm} 
-              disabled={!duplicateFiles.some(f => f.selected)}
-              className="flex-1 bg-amber-500 hover:bg-amber-600"
-            >
-              استبدال المحدد ({duplicateFiles.filter(f => f.selected).length})
+            <Button onClick={handleDuplicateConfirm} disabled={!duplicateFiles.some(f => f.selected)} className="flex-1 bg-amber-500 hover:bg-amber-600">
+              استبدال ({duplicateFiles.filter(f => f.selected).length})
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Publish Dialog */}
       <Dialog open={showPublishDialog} onOpenChange={setShowPublishDialog}>
         <DialogContent className="bg-[#252525] border-white/10">
           <DialogHeader>
@@ -1102,7 +1154,6 @@ const AICodingProject = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Share Dialog */}
       <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
         <DialogContent className="bg-[#252525] border-white/10">
           <DialogHeader>
