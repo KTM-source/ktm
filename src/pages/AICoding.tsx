@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,7 +22,6 @@ import {
   User,
   Brain,
   FileEdit,
-  RefreshCw,
   ArrowLeft,
   Maximize2,
   Minimize2,
@@ -32,7 +31,16 @@ import {
   ChevronDown,
   X,
   Pencil,
-  BookOpen
+  BookOpen,
+  Share2,
+  Link,
+  ExternalLink,
+  Menu,
+  Settings,
+  Folder,
+  ChevronRight,
+  File as FileIcon,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +50,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const CODING_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-coding-chat`;
 
@@ -54,6 +69,7 @@ interface CodeFile {
 interface Message {
   role: "user" | "assistant";
   content: string;
+  isThinking?: boolean;
 }
 
 interface AIAction {
@@ -68,6 +84,8 @@ interface Project {
   files: CodeFile[];
   created_at: string;
   updated_at: string;
+  share_id?: string;
+  is_public?: boolean;
 }
 
 // CSS Animation styles
@@ -88,8 +106,8 @@ const animationStyles = `
   }
   
   @keyframes typing-dot {
-    0%, 60%, 100% { transform: translateY(0); }
-    30% { transform: translateY(-10px); }
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+    30% { transform: translateY(-8px); opacity: 1; }
   }
   
   @keyframes slide-up {
@@ -97,14 +115,29 @@ const animationStyles = `
     to { opacity: 1; transform: translateY(0); }
   }
   
-  @keyframes code-line {
-    from { width: 0; opacity: 0; }
-    to { width: 100%; opacity: 1; }
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes code-write {
+    from { width: 0; }
+    to { width: 100%; }
   }
   
   @keyframes blink-cursor {
     0%, 50% { border-color: transparent; }
     51%, 100% { border-color: #10b981; }
+  }
+  
+  @keyframes rotate-icon {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
   
   .animate-shimmer {
@@ -125,6 +158,14 @@ const animationStyles = `
     animation: slide-up 0.4s ease-out forwards;
   }
   
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out forwards;
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+  
   .typing-animation span {
     display: inline-block;
     animation: typing-dot 1.4s infinite;
@@ -133,62 +174,31 @@ const animationStyles = `
   .typing-animation span:nth-child(2) { animation-delay: 0.2s; }
   .typing-animation span:nth-child(3) { animation-delay: 0.4s; }
   
-  .code-editor-line {
-    animation: code-line 0.3s ease-out forwards;
+  .animate-rotate {
+    animation: rotate-icon 1s linear infinite;
   }
   
-  .cursor-blink {
-    border-right: 2px solid #10b981;
-    animation: blink-cursor 1s infinite;
+  .code-highlight {
+    transition: background-color 0.3s ease;
+  }
+  
+  .code-highlight:hover {
+    background-color: rgba(16, 185, 129, 0.1);
+  }
+  
+  .file-item-active {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15));
+    border-color: rgba(16, 185, 129, 0.4);
   }
 `;
 
-// Status indicator component with animations
-const StatusIndicator = ({ action, editsCount }: { action: AIAction | null; editsCount: number }) => {
-  const icons = {
-    thinking: <Brain className="w-4 h-4 animate-pulse" />,
-    reading: <BookOpen className="w-4 h-4 animate-pulse" />,
-    editing: <Pencil className="w-4 h-4 animate-pulse" />,
-    done: <Check className="w-4 h-4 text-emerald-400" />
-  };
-
-  const labels = {
-    thinking: "يفكر...",
-    reading: `يقرأ ${action?.file || ""}`,
-    editing: `يحرر ${action?.file || ""}`,
-    done: "انتهى"
-  };
-
-  const colors = {
-    thinking: "text-purple-400 bg-purple-500/10 border-purple-500/30",
-    reading: "text-blue-400 bg-blue-500/10 border-blue-500/30",
-    editing: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-    done: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
-  };
-
-  return (
-    <div className="flex items-center gap-3">
-      {editsCount > 0 && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium animate-slide-up">
-          <Pencil className="w-3.5 h-3.5" />
-          <span>{editsCount} تعديل</span>
-        </div>
-      )}
-      {action && (
-        <div className={cn(
-          "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium animate-slide-up",
-          colors[action.type]
-        )}>
-          {icons[action.type]}
-          <span>{labels[action.type]}</span>
-        </div>
-      )}
-    </div>
-  );
+// Generate unique share ID
+const generateShareId = () => {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 };
 
-// File tab component with animations
-const FileTab = ({ 
+// File sidebar item
+const FileSidebarItem = ({ 
   file, 
   isActive, 
   onClick, 
@@ -200,33 +210,53 @@ const FileTab = ({
   onClick: () => void;
   onDelete: () => void;
   isEditing?: boolean;
-}) => (
-  <div 
-    className={cn(
-      "flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all duration-300 group",
-      isActive 
-        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10" 
-        : "bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent hover:border-white/10",
-      isEditing && "animate-pulse-glow"
-    )}
-    onClick={onClick}
-  >
-    <FileCode className={cn("w-4 h-4 transition-transform duration-300", isActive && "scale-110")} />
-    <span className="text-sm font-medium">{file.name}</span>
-    {isEditing && (
-      <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-    )}
-    <button
-      onClick={(e) => { e.stopPropagation(); onDelete(); }}
-      className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all duration-200"
-    >
-      <X className="w-3 h-3" />
-    </button>
-  </div>
-);
+}) => {
+  const getFileIcon = (name: string) => {
+    if (name.endsWith('.html')) return '🌐';
+    if (name.endsWith('.css')) return '🎨';
+    if (name.endsWith('.js')) return '⚡';
+    return '📄';
+  };
 
-// Message component with animations
-const ChatMessage = ({ message, index }: { message: Message; index: number }) => {
+  return (
+    <div 
+      className={cn(
+        "flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all duration-300 group",
+        isActive 
+          ? "file-item-active border border-emerald-500/40 text-emerald-300" 
+          : "text-gray-400 hover:bg-white/5 border border-transparent hover:text-gray-200"
+      )}
+      onClick={onClick}
+    >
+      <span className="text-sm">{getFileIcon(file.name)}</span>
+      <span className="text-sm flex-1 truncate">{file.name}</span>
+      {isEditing && (
+        <div className="flex items-center gap-1">
+          <Pencil className="w-3 h-3 text-amber-400 animate-pulse" />
+        </div>
+      )}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all duration-200"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+};
+
+// Message component with status inside
+const ChatMessage = ({ 
+  message, 
+  index, 
+  action,
+  editsCount 
+}: { 
+  message: Message; 
+  index: number;
+  action?: AIAction | null;
+  editsCount?: number;
+}) => {
   const isUser = message.role === "user";
   
   return (
@@ -238,45 +268,112 @@ const ChatMessage = ({ message, index }: { message: Message; index: number }) =>
       style={{ animationDelay: `${index * 50}ms` }}
     >
       <div className={cn(
-        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-transform duration-300 hover:scale-110",
+        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-transform duration-300",
         isUser 
-          ? "bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/30" 
-          : "bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/30"
+          ? "bg-gradient-to-br from-emerald-500 to-cyan-500" 
+          : "bg-gradient-to-br from-purple-500 to-pink-500"
       )}>
         {isUser ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
       </div>
       <div className={cn(
-        "max-w-[80%] rounded-2xl px-4 py-3 transition-all duration-300 hover:scale-[1.02]",
+        "max-w-[85%] rounded-2xl px-4 py-3",
         isUser 
           ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-50 border border-emerald-500/30" 
-          : "bg-white/5 text-gray-200 border border-white/10 hover:border-white/20"
+          : "bg-white/5 text-gray-200 border border-white/10"
       )}>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        {message.isThinking && action ? (
+          <div className="flex items-center gap-3">
+            {action.type === "thinking" && (
+              <>
+                <Brain className="w-4 h-4 text-purple-400 animate-pulse" />
+                <span className="text-sm text-purple-300">يفكر...</span>
+              </>
+            )}
+            {action.type === "reading" && (
+              <>
+                <BookOpen className="w-4 h-4 text-blue-400 animate-pulse" />
+                <span className="text-sm text-blue-300">يقرأ {action.file || "الملفات"}...</span>
+              </>
+            )}
+            {action.type === "editing" && (
+              <>
+                <Pencil className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="text-sm text-amber-300">يحرر {action.file}...</span>
+                {editsCount && editsCount > 0 && (
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">
+                    {editsCount} تعديل
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        )}
       </div>
     </div>
   );
 };
 
-// Typing indicator
-const TypingIndicator = () => (
-  <div className="flex gap-3 animate-slide-up">
-    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/30 animate-float">
-      <Bot className="w-4 h-4 text-white" />
-    </div>
-    <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
-      <div className="typing-animation flex gap-1">
-        <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-        <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-        <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-      </div>
-    </div>
-  </div>
-);
+// Dynamic suggestions based on context
+const generateSuggestions = (lastMessage: string | undefined): string[] => {
+  if (!lastMessage) {
+    return [
+      "صمم صفحة هبوط احترافية",
+      "أضف تأثيرات أنيميشن جميلة",
+      "سوي نموذج تواصل متكامل",
+      "صمم قائمة تنقل متجاوبة",
+      "أضف وضع ليلي/نهاري"
+    ];
+  }
+  
+  const lowerMsg = lastMessage.toLowerCase();
+  
+  if (lowerMsg.includes("صفحة") || lowerMsg.includes("موقع")) {
+    return [
+      "أضف قائمة تنقل علوية",
+      "أضف تذييل للصفحة",
+      "حسّن التصميم للجوال",
+      "أضف أيقونات وصور",
+      "أضف تأثيرات حركية"
+    ];
+  }
+  
+  if (lowerMsg.includes("أنيميشن") || lowerMsg.includes("تأثير")) {
+    return [
+      "أضف تأثير hover للأزرار",
+      "أضف تأثير ظهور تدريجي",
+      "أضف تأثير parallax",
+      "أضف تأثير تموج",
+      "أضف تأثير 3D"
+    ];
+  }
+  
+  if (lowerMsg.includes("نموذج") || lowerMsg.includes("فورم")) {
+    return [
+      "أضف validation للحقول",
+      "أضف رسالة نجاح",
+      "أضف أيقونات للحقول",
+      "حسّن تصميم الأزرار",
+      "أضف تأثيرات focus"
+    ];
+  }
+  
+  return [
+    "أضف صفحة جديدة",
+    "حسّن الألوان",
+    "أضف المزيد من المحتوى",
+    "أضف تفاعلية JavaScript",
+    "حسّن SEO"
+  ];
+};
 
 const AICoding = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const sharedId = searchParams.get('share');
   
   // State
   const [files, setFiles] = useState<CodeFile[]>([
@@ -287,11 +384,7 @@ const AICoding = () => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>صفحتي</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, sans-serif;
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
@@ -317,10 +410,7 @@ const AICoding = () => {
             -webkit-text-fill-color: transparent;
             margin-bottom: 20px;
         }
-        p {
-            color: #94a3b8;
-            font-size: 1.1rem;
-        }
+        p { color: #94a3b8; font-size: 1.1rem; }
         .emoji {
             font-size: 4rem;
             margin-bottom: 20px;
@@ -356,18 +446,36 @@ const AICoding = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [projectName, setProjectName] = useState("مشروع جديد");
   const [showProjects, setShowProjects] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareLink, setShareLink] = useState("");
+  const [showCodeView, setShowCodeView] = useState(false);
+  const [isAIEditing, setIsAIEditing] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeFile = files[activeFileIndex];
 
+  // Load shared project
+  useEffect(() => {
+    if (sharedId) {
+      loadSharedProject(sharedId);
+    }
+  }, [sharedId]);
+
   // Load projects on mount
   useEffect(() => {
-    if (user) {
+    if (user && !sharedId) {
       loadProjects();
     }
-  }, [user]);
+  }, [user, sharedId]);
+
+  // Update suggestions when messages change
+  useEffect(() => {
+    const lastAIMessage = messages.filter(m => m.role === "assistant" && !m.isThinking).pop();
+    setSuggestions(generateSuggestions(lastAIMessage?.content));
+  }, [messages]);
 
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
@@ -382,6 +490,29 @@ const AICoding = () => {
   useEffect(() => {
     setPreviewKey(prev => prev + 1);
   }, [activeFile?.content]);
+
+  // Load shared project
+  const loadSharedProject = async (shareId: string) => {
+    const { data, error } = await supabase
+      .from("coding_projects")
+      .select("*")
+      .eq("share_id", shareId)
+      .eq("is_public", true)
+      .single();
+    
+    if (!error && data) {
+      setCurrentProject({
+        ...data,
+        files: (data.files as unknown as CodeFile[]) || []
+      });
+      setProjectName(data.name);
+      setFiles((data.files as unknown as CodeFile[]) || []);
+      setActiveFileIndex(0);
+      toast({ title: `تم تحميل مشروع "${data.name}"` });
+    } else {
+      toast({ title: "لم يتم العثور على المشروع", variant: "destructive" });
+    }
+  };
 
   // Load user projects
   const loadProjects = async () => {
@@ -412,7 +543,6 @@ const AICoding = () => {
 
     try {
       if (currentProject) {
-        // Update existing project
         const { error } = await supabase
           .from("coding_projects")
           .update({ 
@@ -425,7 +555,6 @@ const AICoding = () => {
         if (error) throw error;
         toast({ title: "تم حفظ المشروع بنجاح" });
       } else {
-        // Create new project
         const { data, error } = await supabase
           .from("coding_projects")
           .insert([{
@@ -451,6 +580,47 @@ const AICoding = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Share project
+  const shareProject = async () => {
+    if (!currentProject) {
+      await saveProject();
+    }
+    
+    if (!currentProject?.id) {
+      toast({ title: "يجب حفظ المشروع أولاً", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const shareId = currentProject.share_id || generateShareId();
+      
+      const { error } = await supabase
+        .from("coding_projects")
+        .update({ 
+          share_id: shareId,
+          is_public: true
+        })
+        .eq("id", currentProject.id);
+
+      if (error) throw error;
+
+      const link = `${window.location.origin}/ktm/ai/coding?share=${shareId}`;
+      setShareLink(link);
+      setShowShareDialog(true);
+      setCurrentProject({ ...currentProject, share_id: shareId, is_public: true });
+      
+    } catch (error) {
+      console.error("Share error:", error);
+      toast({ title: "فشل في مشاركة المشروع", variant: "destructive" });
+    }
+  };
+
+  // Copy share link
+  const copyShareLink = async () => {
+    await navigator.clipboard.writeText(shareLink);
+    toast({ title: "تم نسخ رابط المشاركة" });
   };
 
   // Load a project
@@ -596,7 +766,7 @@ const AICoding = () => {
     return { message: cleanMessage.trim(), files: newFiles };
   };
 
-  // Send message to AI with live editing
+  // Send message to AI
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -604,8 +774,33 @@ const AICoding = () => {
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
-    setCurrentAction({ type: "thinking" });
+    setIsAIEditing(true);
     setEditsCount(0);
+    
+    // Add thinking message
+    setMessages(prev => [...prev, { role: "assistant", content: "", isThinking: true }]);
+    setCurrentAction({ type: "thinking" });
+
+    // Auto-save project on first message
+    if (!currentProject && user && messages.length === 0) {
+      const { data } = await supabase
+        .from("coding_projects")
+        .insert([{
+          user_id: user.id,
+          name: projectName,
+          files: JSON.parse(JSON.stringify(files))
+        }])
+        .select()
+        .single();
+
+      if (data) {
+        setCurrentProject({
+          ...data,
+          files: data.files as unknown as CodeFile[]
+        });
+        loadProjects();
+      }
+    }
 
     try {
       const filesContext = files.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n");
@@ -618,7 +813,7 @@ const AICoding = () => {
         },
         body: JSON.stringify({
           messages: [
-            ...messages.map(m => ({ role: m.role, content: m.content })),
+            ...messages.filter(m => !m.isThinking).map(m => ({ role: m.role, content: m.content })),
             { role: "user", content: userMessage }
           ],
           filesContext,
@@ -661,7 +856,6 @@ const AICoding = () => {
             if (content) {
               fullContent += content;
               
-              // Check for file being edited
               const fileMatch = fullContent.match(/```(\w+)?:?([^\n]*)\n/);
               if (fileMatch) {
                 const fileName = fileMatch[2]?.trim() || "ملف جديد";
@@ -675,6 +869,9 @@ const AICoding = () => {
         }
       }
 
+      // Remove thinking message
+      setMessages(prev => prev.filter(m => !m.isThinking));
+
       // Parse and apply file changes
       const { message, files: newFiles } = parseAIResponse(fullContent);
 
@@ -684,10 +881,10 @@ const AICoding = () => {
         setCurrentAction({ type: "editing", file: file.name });
         setEditingFile(file.name);
         
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 200));
         addNewFile(file.name, file.content, file.language);
         
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       setEditingFile(null);
@@ -696,8 +893,20 @@ const AICoding = () => {
       
       setTimeout(() => setCurrentAction(null), 2000);
 
+      // Auto-save after AI response
+      if (currentProject && user) {
+        await supabase
+          .from("coding_projects")
+          .update({ 
+            files: JSON.parse(JSON.stringify(files)),
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", currentProject.id);
+      }
+
     } catch (error) {
       console.error("Chat error:", error);
+      setMessages(prev => prev.filter(m => !m.isThinking));
       toast({ 
         title: "حدث خطأ", 
         description: "فشل في الاتصال بالذكاء الاصطناعي",
@@ -706,12 +915,14 @@ const AICoding = () => {
       setCurrentAction(null);
     } finally {
       setIsLoading(false);
+      setIsAIEditing(false);
       setEditingFile(null);
     }
   };
 
   // Handle code changes
   const handleCodeChange = (newContent: string) => {
+    if (isAIEditing) return; // Prevent editing while AI is working
     const newFiles = [...files];
     newFiles[activeFileIndex].content = newContent;
     setFiles(newFiles);
@@ -734,14 +945,14 @@ const AICoding = () => {
       <style>{animationStyles}</style>
       
       {/* Header */}
-      <header className="border-b border-white/10 bg-black/30 backdrop-blur-xl">
+      <header className="border-b border-white/10 bg-black/40 backdrop-blur-xl z-10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/ktm/ai/trend")}
-              className="text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-300"
+              className="text-gray-400 hover:text-white hover:bg-white/10"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -750,21 +961,54 @@ const AICoding = () => {
                 <Code2 className="w-5 h-5 text-white" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    className="bg-transparent border-none text-lg font-bold text-white p-0 h-auto focus-visible:ring-0 w-40"
-                    placeholder="اسم المشروع"
-                  />
-                </div>
+                <Input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  className="bg-transparent border-none text-lg font-bold text-white p-0 h-auto focus-visible:ring-0 w-48"
+                  placeholder="اسم المشروع"
+                />
                 <p className="text-xs text-gray-400">AI-Powered Code Editor • GPT-5</p>
               </div>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
-            <StatusIndicator action={currentAction} editsCount={editsCount} />
+            {/* Current action status */}
+            {currentAction && (
+              <div className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm animate-slide-up",
+                currentAction.type === "thinking" && "bg-purple-500/20 text-purple-300 border border-purple-500/30",
+                currentAction.type === "reading" && "bg-blue-500/20 text-blue-300 border border-blue-500/30",
+                currentAction.type === "editing" && "bg-amber-500/20 text-amber-300 border border-amber-500/30",
+                currentAction.type === "done" && "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+              )}>
+                {currentAction.type === "thinking" && <Brain className="w-4 h-4 animate-pulse" />}
+                {currentAction.type === "reading" && <BookOpen className="w-4 h-4 animate-pulse" />}
+                {currentAction.type === "editing" && <Pencil className="w-4 h-4 animate-pulse" />}
+                {currentAction.type === "done" && <Check className="w-4 h-4" />}
+                <span>
+                  {currentAction.type === "thinking" && "يفكر..."}
+                  {currentAction.type === "reading" && `يقرأ ${currentAction.file || ""}`}
+                  {currentAction.type === "editing" && `يحرر ${currentAction.file || ""}`}
+                  {currentAction.type === "done" && "انتهى"}
+                </span>
+                {editsCount > 0 && (
+                  <span className="bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full text-xs">
+                    {editsCount} تعديل
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* Share button */}
+            <Button
+              variant="ghost"
+              onClick={shareProject}
+              className="text-gray-400 hover:text-white gap-2"
+            >
+              <Share2 className="w-4 h-4" />
+              <span className="hidden md:inline">مشاركة</span>
+            </Button>
             
             {/* Projects dropdown */}
             <DropdownMenu open={showProjects} onOpenChange={setShowProjects}>
@@ -814,7 +1058,7 @@ const AICoding = () => {
             <Button
               onClick={saveProject}
               disabled={isSaving}
-              className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:scale-105"
+              className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-lg shadow-emerald-500/30"
             >
               {isSaving ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -832,40 +1076,59 @@ const AICoding = () => {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Chat Panel */}
-        <div className="w-[380px] border-r border-white/10 flex flex-col bg-black/20">
+        <div className="w-[350px] border-r border-white/10 flex flex-col bg-black/20">
+          {/* Chat Header */}
+          <div className="p-4 border-b border-white/10 bg-black/30">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">KTM Coder</h3>
+                <p className="text-xs text-gray-400">مطور ويب محترف</p>
+              </div>
+            </div>
+          </div>
+
           {/* Messages */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {messages.length === 0 && (
-                <div className="text-center py-12 animate-slide-up">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center animate-float">
-                    <Sparkles className="w-10 h-10 text-emerald-400" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-2">KTM Coding</h3>
-                  <p className="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">
-                    اكتب طلبك وسأقوم بكتابة الكود مباشرة. أستطيع إنشاء صفحات HTML كاملة مع CSS و JavaScript.
+                <div className="text-center py-8 animate-fade-in">
+                  <p className="text-sm text-gray-400 mb-4">
+                    اكتب طلبك وسأبرمجه لك فوراً
                   </p>
-                  <div className="mt-6 space-y-2">
-                    {["صمم صفحة هبوط احترافية", "أضف تأثيرات أنيميشن جميلة", "سوي نموذج تواصل متكامل"].map((suggestion, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setInput(suggestion)}
-                        className="block w-full text-right px-4 py-2 rounded-lg bg-white/5 text-gray-400 text-sm hover:bg-emerald-500/10 hover:text-emerald-400 transition-all duration-300"
-                        style={{ animationDelay: `${i * 100}ms` }}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
               {messages.map((msg, i) => (
-                <ChatMessage key={i} message={msg} index={i} />
+                <ChatMessage 
+                  key={i} 
+                  message={msg} 
+                  index={i}
+                  action={msg.isThinking ? currentAction : null}
+                  editsCount={msg.isThinking ? editsCount : 0}
+                />
               ))}
-              {isLoading && <TypingIndicator />}
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
+
+          {/* Suggestions */}
+          {!isLoading && suggestions.length > 0 && (
+            <div className="px-4 pb-2">
+              <div className="flex flex-wrap gap-2">
+                {suggestions.slice(0, 3).map((suggestion, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInput(suggestion)}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white/5 text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all border border-white/5 hover:border-emerald-500/30"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Input */}
           <div className="p-4 border-t border-white/10 bg-black/30">
@@ -875,13 +1138,13 @@ const AICoding = () => {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
                 placeholder="اكتب طلبك هنا..."
-                className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-emerald-500/50 transition-all duration-300"
+                className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-emerald-500/50"
                 disabled={isLoading}
               />
               <Button
                 onClick={sendMessage}
                 disabled={isLoading || !input.trim()}
-                className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:scale-105"
+                className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
@@ -889,118 +1152,207 @@ const AICoding = () => {
           </div>
         </div>
 
-        {/* Editor & Preview Panel */}
-        <div className="flex-1 flex flex-col">
-          {/* File tabs */}
-          <div className="flex items-center gap-2 p-2 border-b border-white/10 bg-black/30 overflow-x-auto">
-            {files.map((file, i) => (
-              <FileTab
-                key={file.name}
-                file={file}
-                isActive={i === activeFileIndex}
-                onClick={() => setActiveFileIndex(i)}
-                onDelete={() => deleteFile(i)}
-                isEditing={editingFile === file.name}
-              />
-            ))}
+        {/* Files Sidebar */}
+        <div className={cn(
+          "border-r border-white/10 bg-black/30 flex flex-col transition-all duration-300",
+          sidebarOpen ? "w-48" : "w-12"
+        )}>
+          <div className="p-2 border-b border-white/10 flex items-center justify-between">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => {
-                const name = prompt("اسم الملف الجديد:", "page.html");
-                if (name) addNewFile(name);
-              }}
-              className="text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-300"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-gray-400 hover:text-white"
             >
-              <Plus className="w-4 h-4" />
+              {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
             </Button>
+            {sidebarOpen && (
+              <span className="text-xs text-gray-400 font-medium">الملفات</span>
+            )}
           </div>
-
-          {/* Editor and Preview split */}
-          <div className="flex-1 flex">
-            {/* Code Editor */}
-            <div className={cn(
-              "flex flex-col border-r border-white/10 transition-all duration-500",
-              isPreviewFullscreen ? "w-0 overflow-hidden" : "w-1/2"
-            )}>
-              {/* Editor toolbar */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
-                <div className="flex items-center gap-2">
-                  <FileCode className="w-4 h-4 text-emerald-400" />
-                  <span className="text-sm font-medium text-white">{activeFile?.name}</span>
-                  {editingFile === activeFile?.name && (
-                    <span className="text-xs text-amber-400 animate-pulse">يُحرَّر...</span>
+          
+          {sidebarOpen ? (
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-1">
+                {files.map((file, i) => (
+                  <FileSidebarItem
+                    key={file.name}
+                    file={file}
+                    isActive={i === activeFileIndex}
+                    onClick={() => setActiveFileIndex(i)}
+                    onDelete={() => deleteFile(i)}
+                    isEditing={editingFile === file.name}
+                  />
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const name = prompt("اسم الملف الجديد:", "page.html");
+                  if (name) addNewFile(name);
+                }}
+                className="w-full mt-2 text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 justify-start gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                ملف جديد
+              </Button>
+            </ScrollArea>
+          ) : (
+            <div className="flex-1 flex flex-col items-center pt-2 space-y-1">
+              {files.map((file, i) => (
+                <button
+                  key={file.name}
+                  onClick={() => setActiveFileIndex(i)}
+                  className={cn(
+                    "w-8 h-8 rounded flex items-center justify-center text-xs transition-all",
+                    i === activeFileIndex 
+                      ? "bg-emerald-500/20 text-emerald-400" 
+                      : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
                   )}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={copyCode} className="text-gray-400 hover:text-white h-8 w-8 transition-all duration-300">
+                  title={file.name}
+                >
+                  {file.name.endsWith('.html') ? '🌐' : file.name.endsWith('.css') ? '🎨' : '⚡'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Preview & Code Panel */}
+        <div className="flex-1 flex flex-col">
+          {/* Tabs for Preview/Code */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCodeView(false)}
+                className={cn(
+                  "gap-2",
+                  !showCodeView ? "bg-emerald-500/20 text-emerald-400" : "text-gray-400 hover:text-white"
+                )}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCodeView(true)}
+                className={cn(
+                  "gap-2",
+                  showCodeView ? "bg-emerald-500/20 text-emerald-400" : "text-gray-400 hover:text-white"
+                )}
+              >
+                <Code2 className="w-4 h-4" />
+                Code
+              </Button>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {showCodeView && (
+                <>
+                  <Button variant="ghost" size="icon" onClick={copyCode} className="text-gray-400 hover:text-white h-8 w-8">
                     {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={downloadFile} className="text-gray-400 hover:text-white h-8 w-8 transition-all duration-300">
+                  <Button variant="ghost" size="icon" onClick={downloadFile} className="text-gray-400 hover:text-white h-8 w-8">
                     <Download className="w-4 h-4" />
                   </Button>
-                </div>
-              </div>
-              
-              {/* Code textarea */}
-              <textarea
-                ref={textareaRef}
-                value={activeFile?.content || ""}
-                onChange={(e) => handleCodeChange(e.target.value)}
-                className={cn(
-                  "flex-1 w-full p-4 bg-[#0d1117] text-gray-300 font-mono text-sm resize-none focus:outline-none transition-all duration-300",
-                  editingFile === activeFile?.name && "animate-shimmer"
-                )}
-                style={{ tabSize: 2 }}
-                spellCheck={false}
-              />
+                </>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setPreviewKey(prev => prev + 1)}
+                className="text-gray-400 hover:text-white h-8 w-8"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsPreviewFullscreen(!isPreviewFullscreen)}
+                className="text-gray-400 hover:text-white h-8 w-8"
+              >
+                {isPreviewFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </Button>
             </div>
+          </div>
 
-            {/* Preview */}
-            <div className={cn(
-              "flex flex-col transition-all duration-500",
-              isPreviewFullscreen ? "w-full" : "w-1/2"
-            )}>
-              {/* Preview toolbar */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
-                <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-cyan-400" />
-                  <span className="text-sm font-medium text-white">Preview</span>
+          {/* Content */}
+          <div className="flex-1 relative">
+            {showCodeView ? (
+              <div className="absolute inset-0 bg-[#0d1117] overflow-auto">
+                <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border-b border-white/10">
+                  <FileCode className="w-4 h-4 text-emerald-400" />
+                  <span className="text-sm text-white font-medium">{activeFile?.name}</span>
+                  {isAIEditing && editingFile === activeFile?.name && (
+                    <span className="text-xs text-amber-400 animate-pulse flex items-center gap-1">
+                      <Pencil className="w-3 h-3" />
+                      يُحرَّر...
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => setPreviewKey(prev => prev + 1)}
-                    className="text-gray-400 hover:text-white h-8 w-8 transition-all duration-300 hover:rotate-180"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => setIsPreviewFullscreen(!isPreviewFullscreen)}
-                    className="text-gray-400 hover:text-white h-8 w-8 transition-all duration-300"
-                  >
-                    {isPreviewFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Preview iframe */}
-              <div className="flex-1 bg-white relative overflow-hidden">
-                <iframe
-                  key={previewKey}
-                  srcDoc={getPreviewHTML()}
-                  className="w-full h-full border-0 transition-opacity duration-300"
-                  title="Preview"
-                  sandbox="allow-scripts"
+                <textarea
+                  value={activeFile?.content || ""}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  disabled={isAIEditing}
+                  className={cn(
+                    "w-full h-[calc(100%-40px)] p-4 bg-transparent text-gray-300 font-mono text-sm resize-none focus:outline-none",
+                    isAIEditing && "opacity-70 cursor-not-allowed"
+                  )}
+                  spellCheck={false}
+                  style={{ tabSize: 2 }}
                 />
               </div>
-            </div>
+            ) : (
+              <iframe
+                key={previewKey}
+                srcDoc={getPreviewHTML()}
+                className="w-full h-full bg-white"
+                title="Preview"
+                sandbox="allow-scripts allow-same-origin"
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Share Dialog */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="bg-[#1a1a2e] border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Share2 className="w-5 h-5 text-emerald-400" />
+              مشاركة المشروع
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              يمكن لأي شخص لديه الرابط عرض هذا المشروع
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                value={shareLink}
+                readOnly
+                className="flex-1 bg-white/5 border-white/10 text-white text-sm"
+              />
+              <Button onClick={copyShareLink} className="bg-emerald-500 hover:bg-emerald-600">
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full border-white/10 text-gray-300 hover:bg-white/5"
+              onClick={() => window.open(shareLink, '_blank')}
+            >
+              <ExternalLink className="w-4 h-4 ml-2" />
+              فتح في صفحة جديدة
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
