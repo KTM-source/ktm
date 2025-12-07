@@ -60,6 +60,7 @@ import {
   Table,
   Copy,
   Check,
+  Code2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -748,6 +749,7 @@ export default function AITrend() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(false);
+  const [showCodingRedirect, setShowCodingRedirect] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; convId: string; title: string }>({
     isOpen: false,
     convId: '',
@@ -1164,6 +1166,25 @@ https://images.igdb.com/igdb/image/upload/t_cover_big/[IMAGE_ID].jpg
     if (!textToSend || isLoading) return;
     if (!user) {
       toast.error("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
+    // Check if user is asking for code - redirect to coding page
+    const codeKeywords = [
+      'اكتب كود', 'اكتب لي كود', 'سوي كود', 'اعمل كود', 'برمج', 'برمجة',
+      'html', 'css', 'javascript', 'js', 'صفحة ويب', 'موقع', 'سكربت',
+      'write code', 'make code', 'create code', 'build website', 'webpage',
+      'اكتب صفحة', 'سوي صفحة', 'اعمل صفحة', 'صمم صفحة', 'صمم موقع',
+      'كود html', 'كود css', 'كود جافاسكربت', 'اكواد', 'أكواد'
+    ];
+    
+    const isCodeRequest = codeKeywords.some(keyword => 
+      textToSend.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (isCodeRequest) {
+      setShowCodingRedirect(true);
+      setInput("");
       return;
     }
 
@@ -1777,6 +1798,37 @@ https://images.igdb.com/igdb/image/upload/t_cover_big/[IMAGE_ID].jpg
                 </div>
               )}
             </div>
+
+            {/* Coding Redirect Button */}
+            {showCodingRedirect && (
+              <div className="px-5 pb-4">
+                <div className="max-w-4xl mx-auto">
+                  <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-6 animate-scale-in">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-xl shadow-purple-500/30">
+                          <Code2 className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-white mb-1">لكتابة الأكواد البرمجية</h3>
+                          <p className="text-gray-400 text-sm">انتقل لمحرر الأكواد الذكي KTM Coding</p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setShowCodingRedirect(false);
+                          navigate("/ktm/ai/coding");
+                        }}
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-6 py-3 rounded-xl shadow-xl shadow-purple-500/30 transition-all duration-300 hover:scale-105"
+                      >
+                        <Code2 className="w-5 h-5 ml-2" />
+                        الانتقال للبرمجة
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {suggestions.length > 0 && messages.length > 0 && (
               <div className="px-5 pb-2">

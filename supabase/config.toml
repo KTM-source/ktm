@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.ai-trend-chat]
 verify_jwt = false
+
+[functions.ai-coding-chat]
+verify_jwt = false
