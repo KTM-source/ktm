@@ -28,6 +28,9 @@ import {
   Calendar,
   ChevronRight,
   Zap,
+  Bold,
+  List,
+  Code,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +40,7 @@ interface Message {
   content: string;
   created_at: string;
   isAnimating?: boolean;
+  displayedContent?: string;
 }
 
 interface Conversation {
@@ -61,25 +65,115 @@ interface TrendHistory {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-trend-chat`;
 
-// Word-by-word animated text component with fade effect
-const AnimatedWords = ({ text, className }: { text: string; className?: string }) => {
-  const words = text.split(/(\s+)/);
+// Markdown-style content parser for rich formatting
+const FormattedContent = ({ content, isAnimating }: { content: string; isAnimating?: boolean }) => {
+  const formatText = (text: string) => {
+    // Split into lines for processing
+    const lines = text.split('\n');
+    
+    return lines.map((line, lineIndex) => {
+      // Bold text: **text**
+      let processedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>');
+      
+      // Bullet points: - text or • text
+      if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
+        processedLine = `<span class="flex gap-2"><span class="text-emerald-400">•</span><span>${processedLine.replace(/^[-•]\s*/, '')}</span></span>`;
+      }
+      
+      // Numbered lists: 1. text
+      const numberedMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      if (numberedMatch) {
+        processedLine = `<span class="flex gap-2"><span class="text-emerald-400 font-semibold">${numberedMatch[1]}.</span><span>${numberedMatch[2]}</span></span>`;
+      }
+      
+      // Code blocks: `code`
+      processedLine = processedLine.replace(/`([^`]+)`/g, '<code class="bg-white/10 px-2 py-0.5 rounded-lg text-emerald-300 font-mono text-sm">$1</code>');
+      
+      // Headings: ## text
+      if (line.startsWith('## ')) {
+        processedLine = `<span class="text-xl font-bold text-emerald-400 block mt-4 mb-2">${line.slice(3)}</span>`;
+      } else if (line.startsWith('# ')) {
+        processedLine = `<span class="text-2xl font-bold text-white block mt-4 mb-2">${line.slice(2)}</span>`;
+      }
+      
+      // Horizontal rule: ---
+      if (line.trim() === '---') {
+        return <hr key={lineIndex} className="border-white/10 my-4" />;
+      }
+      
+      return (
+        <span 
+          key={lineIndex} 
+          className="block"
+          dangerouslySetInnerHTML={{ __html: processedLine || '&nbsp;' }}
+        />
+      );
+    });
+  };
+
+  return (
+    <div className="leading-relaxed text-lg space-y-1">
+      {formatText(content)}
+    </div>
+  );
+};
+
+// Character-by-character animated text with proper buffering
+const StreamingText = ({ 
+  content, 
+  onComplete 
+}: { 
+  content: string; 
+  onComplete?: () => void;
+}) => {
+  const [displayedChars, setDisplayedChars] = useState(0);
+  const animationRef = useRef<number | null>(null);
+  const lastContentRef = useRef(content);
+  
+  useEffect(() => {
+    // If content grew, continue animating
+    if (content.length > lastContentRef.current.length) {
+      lastContentRef.current = content;
+    }
+    
+    // Animate each character
+    const animate = () => {
+      setDisplayedChars(prev => {
+        if (prev < content.length) {
+          animationRef.current = requestAnimationFrame(animate);
+          return prev + 1;
+        } else {
+          if (onComplete) onComplete();
+          return prev;
+        }
+      });
+    };
+    
+    // Start animation with slight delay between chars
+    const interval = setInterval(() => {
+      setDisplayedChars(prev => {
+        if (prev < content.length) {
+          return prev + 1;
+        } else {
+          clearInterval(interval);
+          if (onComplete) onComplete();
+          return prev;
+        }
+      });
+    }, 15); // 15ms per character for smooth reveal
+    
+    return () => {
+      clearInterval(interval);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [content, onComplete]);
+
+  const visibleContent = content.slice(0, displayedChars);
   
   return (
-    <span className={cn("whitespace-pre-wrap", className)}>
-      {words.map((word, index) => (
-        <span
-          key={index}
-          className="inline-block animate-fade-in opacity-0"
-          style={{
-            animationDelay: `${index * 40}ms`,
-            animationFillMode: 'forwards',
-          }}
-        >
-          {word}
-        </span>
-      ))}
-    </span>
+    <FormattedContent content={visibleContent} isAnimating={displayedChars < content.length} />
   );
 };
 
@@ -98,6 +192,7 @@ export default function AITrend() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
   const [trendingGames, setTrendingGames] = useState<TrendingGame[]>([]);
   const [trendHistory, setTrendHistory] = useState<TrendHistory[]>([]);
@@ -106,6 +201,7 @@ export default function AITrend() {
   const [lastTrendUpdate, setLastTrendUpdate] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingConversation, setPendingConversation] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +273,7 @@ export default function AITrend() {
     if (conversationId) {
       setCurrentConversation(conversationId);
       fetchMessages(conversationId);
+      setPendingConversation(false);
     } else {
       setCurrentConversation(null);
       setMessages([]);
@@ -238,6 +335,70 @@ export default function AITrend() {
     }
   };
 
+  const generateConversationTitle = async (messages: Message[], convId: string) => {
+    try {
+      const lastMessages = messages.slice(-4);
+      const context = lastMessages.map(m => `${m.role}: ${m.content.slice(0, 100)}`).join('\n');
+      
+      const response = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: [{
+            role: "user",
+            content: `بناءً على هذه المحادثة:
+${context}
+
+أنشئ عنوان قصير ومختصر (3-6 كلمات) يصف موضوع المحادثة.
+أرجع العنوان فقط بدون أي علامات أو تنسيق.`
+          }],
+          userContext: { name: "System", email: "system@ktm.com" },
+        }),
+      });
+
+      if (!response.ok) return;
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullResponse += decoder.decode(value, { stream: true });
+        }
+      }
+
+      const lines = fullResponse.split("\n");
+      let title = "";
+      
+      for (const line of lines) {
+        if (line.startsWith("data: ") && !line.includes("[DONE]")) {
+          try {
+            const parsed = JSON.parse(line.slice(6));
+            title += parsed.choices?.[0]?.delta?.content || "";
+          } catch {}
+        }
+      }
+
+      title = title.trim().slice(0, 50);
+      if (title) {
+        await supabase
+          .from("ai_conversations")
+          .update({ title })
+          .eq("id", convId);
+        
+        fetchConversations();
+      }
+    } catch (error) {
+      console.error("Error generating title:", error);
+    }
+  };
+
   const fetchConversations = async () => {
     if (!user) return;
     
@@ -293,22 +454,12 @@ export default function AITrend() {
     navigate("/ktm-admin-panel");
   };
 
-  const createNewConversation = async () => {
-    if (!user) {
-      toast.error("يجب تسجيل الدخول أولاً");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("ai_conversations")
-      .insert({ user_id: user.id, title: "محادثة جديدة" })
-      .select()
-      .single();
-
-    if (!error && data) {
-      setConversations(prev => [data, ...prev]);
-      navigate(`/ktm/ai/trend/${data.id}`);
-    }
+  // Start a new pending conversation (without creating in DB)
+  const startNewConversation = () => {
+    setPendingConversation(true);
+    setCurrentConversation(null);
+    setMessages([]);
+    navigate("/ktm/ai/trend");
   };
 
   const deleteConversation = async (convId: string) => {
@@ -358,18 +509,19 @@ export default function AITrend() {
             role: "user",
             content: `ابحث عن أحدث 15 لعبة ترند ومشهورة لسنة 2025 التي صدرت بالفعل وقابلة للتحميل الآن.
             
-⚠️ مهم جداً: 
-- فقط الألعاب التي صدرت بالفعل ومتاحة للتحميل
-- لا تضمن ألعاب لم تصدر بعد مثل GTA 6
-- استبعد هذه الألعاب لأنها موجودة عندنا: ${existingTitles.slice(0, 30).join(", ")}
+⚠️ تعليمات صارمة:
+1. فقط الألعاب التي صدرت بالفعل ومتاحة للتحميل الآن
+2. لا تضمن أي لعبة لم تصدر بعد مثل GTA 6 أو أي لعبة قادمة
+3. استبعد هذه الألعاب: ${existingTitles.slice(0, 30).join(", ")}
+4. لكل لعبة، ابحث عن رابط صورة حقيقي مباشر من:
+   - Steam CDN: https://cdn.akamai.steamstatic.com/steam/apps/[APPID]/header.jpg
+   - أو IGDB أو أي مصدر موثوق آخر
+5. التصنيفات يجب أن تكون بالإنجليزية (Action, RPG, Adventure, etc)
 
-لكل لعبة ابحث عن:
-1. صورة الغلاف الرسمية (رابط مباشر من Steam أو IGDB أو صور Google)
-2. التصنيفات/الأنواع (Action, RPG, Adventure, etc)
-3. المنصات المتاحة
+أرجع JSON فقط بهذا الشكل الدقيق:
+[{"name": "Game Name", "image": "https://cdn.akamai.steamstatic.com/steam/apps/XXXXX/header.jpg", "genres": ["Action", "RPG"], "platform": "PC, PS5, Xbox"}]
 
-أرجع JSON فقط بدون أي نص آخر:
-[{"name": "اسم اللعبة بالإنجليزية", "image": "رابط صورة مباشر .jpg أو .png", "genres": ["تصنيف1", "تصنيف2"], "platform": "PC, PS5, Xbox"}]`
+مهم جداً: رابط الصورة يجب أن يكون رابط مباشر يعمل وينتهي بـ .jpg أو .png`
           }],
           userContext: { name: "System", email: "system@ktm.com" },
         }),
@@ -410,7 +562,9 @@ export default function AITrend() {
         const filtered = games.filter((g: TrendingGame) => 
           !existingTitles.includes(g.name.toLowerCase()) &&
           !g.name.toLowerCase().includes("gta 6") &&
-          !g.name.toLowerCase().includes("grand theft auto vi")
+          !g.name.toLowerCase().includes("grand theft auto vi") &&
+          !g.name.toLowerCase().includes("2026") &&
+          !g.name.toLowerCase().includes("coming soon")
         ).slice(0, 10).map(g => ({
           ...g,
           fetchedAt: new Date().toISOString()
@@ -450,11 +604,11 @@ export default function AITrend() {
 
     let convId = currentConversation;
 
-    // Create new conversation if none exists
+    // Create new conversation only on first message
     if (!convId) {
       const { data, error } = await supabase
         .from("ai_conversations")
-        .insert({ user_id: user.id, title: textToSend.slice(0, 50) })
+        .insert({ user_id: user.id, title: "محادثة جديدة" })
         .select()
         .single();
 
@@ -464,21 +618,35 @@ export default function AITrend() {
       }
 
       convId = data.id;
+      setCurrentConversation(convId);
       setConversations(prev => [data, ...prev]);
       navigate(`/ktm/ai/trend/${convId}`, { replace: true });
+      setPendingConversation(false);
     }
 
     setInput("");
     setIsLoading(true);
 
-    // Add user message to UI
+    // Add user message to UI (don't replace it)
+    const userMsgId = `user-${Date.now()}`;
     const tempUserMsg: Message = {
-      id: `temp-${Date.now()}`,
+      id: userMsgId,
       role: "user",
       content: textToSend,
       created_at: new Date().toISOString(),
     };
-    setMessages(prev => [...prev, tempUserMsg]);
+    
+    // Add loading message for assistant
+    const loadingMsgId = `loading-${Date.now()}`;
+    const loadingMsg: Message = {
+      id: loadingMsgId,
+      role: "assistant",
+      content: "",
+      created_at: new Date().toISOString(),
+      isAnimating: true,
+    };
+    
+    setMessages(prev => [...prev, tempUserMsg, loadingMsg]);
 
     // Save user message to DB
     await supabase.from("ai_messages").insert({
@@ -486,16 +654,6 @@ export default function AITrend() {
       role: "user",
       content: textToSend,
     });
-
-    // Add loading message
-    const loadingMsg: Message = {
-      id: `loading-${Date.now()}`,
-      role: "assistant",
-      content: "",
-      created_at: new Date().toISOString(),
-      isAnimating: true,
-    };
-    setMessages(prev => [...prev, loadingMsg]);
 
     let assistantContent = "";
 
@@ -507,10 +665,12 @@ export default function AITrend() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: messages.filter(m => !m.id.startsWith('temp-') && !m.id.startsWith('loading-')).map(m => ({
-            role: m.role,
-            content: m.content,
-          })).concat([{ role: "user", content: textToSend }]),
+          messages: messages
+            .filter(m => !m.id.startsWith('loading-'))
+            .map(m => ({
+              role: m.role,
+              content: m.content,
+            })).concat([{ role: "user", content: textToSend }]),
           userContext: {
             name: profile?.first_name || "مستخدم",
             email: user.email,
@@ -550,14 +710,14 @@ export default function AITrend() {
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               assistantContent += content;
-              setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1] = {
-                  ...newMessages[newMessages.length - 1],
-                  content: assistantContent,
-                };
-                return newMessages;
-              });
+              // Update only the assistant message, preserve user message
+              setMessages(prev => 
+                prev.map(msg => 
+                  msg.id === loadingMsgId 
+                    ? { ...msg, content: assistantContent }
+                    : msg
+                )
+              );
             }
           } catch {
             // Incomplete JSON
@@ -574,37 +734,30 @@ export default function AITrend() {
           content: assistantContent,
         });
 
-      // Update conversation title if it's the first message
-      if (messages.length === 0) {
-        await supabase
-          .from("ai_conversations")
-          .update({ title: textToSend.slice(0, 50) })
-          .eq("id", convId);
-        
-        fetchConversations();
+      // Generate AI title after first exchange
+      const allMessages = [...messages, tempUserMsg, { ...loadingMsg, content: assistantContent }];
+      if (allMessages.filter(m => m.role === "user").length <= 2) {
+        generateConversationTitle(allMessages, convId);
       }
 
       // Update final message state
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          ...newMessages[newMessages.length - 1],
-          isAnimating: false,
-        };
-        return newMessages;
-      });
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === loadingMsgId 
+            ? { ...msg, isAnimating: false }
+            : msg
+        )
+      );
 
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          ...newMessages[newMessages.length - 1],
-          content: "عذراً، حدث خطأ. حاول مرة أخرى.",
-          isAnimating: false,
-        };
-        return newMessages;
-      });
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === loadingMsgId 
+            ? { ...msg, content: "عذراً، حدث خطأ. حاول مرة أخرى.", isAnimating: false }
+            : msg
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -681,12 +834,12 @@ export default function AITrend() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="كلمة السر"
-                  className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-16 pr-14 text-xl rounded-2xl placeholder:text-gray-500 transition-all duration-300 focus:shadow-lg focus:shadow-emerald-500/10"
+                  className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-16 pr-14 text-xl rounded-[1.5rem] placeholder:text-gray-500 transition-all duration-300 focus:shadow-lg focus:shadow-emerald-500/10"
                 />
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-16 bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 hover:from-emerald-600 hover:via-cyan-600 hover:to-emerald-600 text-white font-bold text-xl rounded-2xl shadow-xl shadow-emerald-500/30 transition-all duration-500 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full h-16 bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 hover:from-emerald-600 hover:via-cyan-600 hover:to-emerald-600 text-white font-bold text-xl rounded-[1.5rem] shadow-xl shadow-emerald-500/30 transition-all duration-500 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Sparkles className="w-6 h-6 ml-3 animate-pulse" />
                 دخول
@@ -707,7 +860,7 @@ export default function AITrend() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">يجب تسجيل الدخول</h1>
           <p className="text-gray-400 mb-8 text-xl">سجل دخولك للوصول إلى KTM AI Trend</p>
-          <Button onClick={() => navigate("/auth")} className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 px-10 py-4 text-xl rounded-2xl shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/50">
+          <Button onClick={() => navigate("/auth")} className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 px-10 py-4 text-xl rounded-[1.5rem] shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/50">
             تسجيل الدخول
           </Button>
         </div>
@@ -726,44 +879,53 @@ export default function AITrend() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed md:relative z-50 h-screen bg-[#111118]/80 backdrop-blur-3xl border-r border-white/5 transition-all duration-500 flex flex-col",
-          isSidebarOpen ? "w-80" : "w-0 md:w-20"
+          "fixed md:relative z-50 h-screen bg-[#111118]/90 backdrop-blur-3xl border-r border-white/5 transition-all duration-500 flex flex-col overflow-hidden",
+          isSidebarOpen 
+            ? isSidebarCollapsed ? "w-20" : "w-80" 
+            : "w-0 md:w-20"
         )}
       >
         {/* Sidebar Header */}
-        <div className="p-5 border-b border-white/5 flex items-center justify-between">
-          {isSidebarOpen ? (
+        <div className="p-4 border-b border-white/5 flex items-center justify-between min-h-[80px]">
+          {(!isSidebarCollapsed && isSidebarOpen) ? (
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <div className="w-12 h-12 rounded-[1rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
                 <img src="/favicon.png" alt="KTM" className="w-7 h-7" />
               </div>
-              <span className="font-bold text-xl bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              <span className="font-bold text-xl bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent whitespace-nowrap">
                 AI Trend
               </span>
             </div>
           ) : (
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+            <div className="w-12 h-12 mx-auto rounded-[1rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
               <img src="/favicon.png" alt="KTM" className="w-7 h-7" />
             </div>
           )}
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="hover:bg-white/5 text-gray-400 hover:text-white rounded-xl"
+            onClick={() => {
+              if (isSidebarOpen) {
+                setIsSidebarCollapsed(!isSidebarCollapsed);
+              } else {
+                setIsSidebarOpen(true);
+                setIsSidebarCollapsed(false);
+              }
+            }}
+            className="hover:bg-white/5 text-gray-400 hover:text-white rounded-[0.75rem] flex-shrink-0"
           >
-            {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isSidebarCollapsed || !isSidebarOpen ? <Menu className="w-5 h-5" /> : <X className="w-5 h-5" />}
           </Button>
         </div>
 
-        {/* Navigation Tabs */}
-        {isSidebarOpen && (
+        {/* Navigation Tabs - only show when expanded */}
+        {!isSidebarCollapsed && isSidebarOpen && (
           <div className="p-4 border-b border-white/5">
-            <div className="flex gap-2 bg-white/5 p-1.5 rounded-2xl">
+            <div className="flex gap-2 bg-white/5 p-1.5 rounded-[1rem]">
               <button
                 onClick={() => setActiveTab("chat")}
                 className={cn(
-                  "flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
+                  "flex-1 py-3 px-4 rounded-[0.75rem] text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
                   activeTab === "chat"
                     ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -775,7 +937,7 @@ export default function AITrend() {
               <button
                 onClick={() => setActiveTab("trends")}
                 className={cn(
-                  "flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
+                  "flex-1 py-3 px-4 rounded-[0.75rem] text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
                   activeTab === "trends"
                     ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -788,17 +950,49 @@ export default function AITrend() {
           </div>
         )}
 
+        {/* Collapsed tabs */}
+        {(isSidebarCollapsed || !isSidebarOpen) && (
+          <div className="p-2 border-b border-white/5 space-y-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTab("chat")}
+              className={cn(
+                "w-full h-12 rounded-[0.75rem]",
+                activeTab === "chat" 
+                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white" 
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <MessageSquare className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTab("trends")}
+              className={cn(
+                "w-full h-12 rounded-[0.75rem]",
+                activeTab === "trends" 
+                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white" 
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <TrendingUp className="w-5 h-5" />
+            </Button>
+          </div>
+        )}
+
         {/* New Conversation Button */}
         <div className="p-4">
           <Button
-            onClick={createNewConversation}
+            onClick={startNewConversation}
             className={cn(
-              "w-full gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-2xl h-14 font-medium shadow-xl shadow-emerald-500/20 transition-all duration-300 hover:shadow-emerald-500/40",
-              !isSidebarOpen && "justify-center p-2"
+              "w-full gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-[1rem] h-14 font-medium shadow-xl shadow-emerald-500/20 transition-all duration-300 hover:shadow-emerald-500/40",
+              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2"
             )}
           >
             <Plus className="w-5 h-5" />
-            {isSidebarOpen && "محادثة جديدة"}
+            {!isSidebarCollapsed && isSidebarOpen && "محادثة جديدة"}
           </Button>
         </div>
 
@@ -808,7 +1002,7 @@ export default function AITrend() {
             <div
               key={conv.id}
               className={cn(
-                "group flex items-center gap-3 p-4 rounded-2xl cursor-pointer transition-all duration-300",
+                "group flex items-center gap-3 p-3 rounded-[1rem] cursor-pointer transition-all duration-300",
                 currentConversation === conv.id
                   ? "bg-gradient-to-r from-emerald-500/15 to-cyan-500/15 border border-emerald-500/30"
                   : "hover:bg-white/5"
@@ -817,20 +1011,20 @@ export default function AITrend() {
               style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-300",
+                "w-10 h-10 rounded-[0.75rem] flex items-center justify-center flex-shrink-0 transition-all duration-300",
                 currentConversation === conv.id
                   ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/20"
                   : "bg-white/5"
               )}>
                 <MessageSquare className="w-4 h-4" />
               </div>
-              {isSidebarOpen && (
+              {!isSidebarCollapsed && isSidebarOpen && (
                 <>
                   <span className="flex-1 truncate text-sm text-gray-300">{conv.title}</span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="opacity-0 group-hover:opacity-100 h-9 w-9 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all duration-300"
+                    className="opacity-0 group-hover:opacity-100 h-9 w-9 hover:bg-red-500/10 hover:text-red-400 rounded-[0.75rem] transition-all duration-300"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteConversation(conv.id);
@@ -848,19 +1042,25 @@ export default function AITrend() {
         <div className="p-4 border-t border-white/5 space-y-2">
           <Button
             variant="ghost"
-            className={cn("w-full gap-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-2xl h-12", !isSidebarOpen && "justify-center p-2")}
+            className={cn(
+              "w-full gap-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-[1rem] h-12", 
+              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2"
+            )}
             onClick={() => navigate("/ktm-admin-panel")}
           >
             <Home className="w-4 h-4" />
-            {isSidebarOpen && "لوحة التحكم"}
+            {!isSidebarCollapsed && isSidebarOpen && "لوحة التحكم"}
           </Button>
           <Button
             variant="ghost"
-            className={cn("w-full gap-2 text-red-400 hover:bg-red-500/10 rounded-2xl h-12", !isSidebarOpen && "justify-center p-2")}
+            className={cn(
+              "w-full gap-2 text-red-400 hover:bg-red-500/10 rounded-[1rem] h-12", 
+              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2"
+            )}
             onClick={handleLogout}
           >
             <LogOut className="w-4 h-4" />
-            {isSidebarOpen && "خروج"}
+            {!isSidebarCollapsed && isSidebarOpen && "خروج"}
           </Button>
         </div>
       </div>
@@ -875,7 +1075,7 @@ export default function AITrend() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                 <div className="animate-fade-in">
                   <h1 className="text-4xl font-bold text-white flex items-center gap-4 mb-2">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
+                    <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
                       <Flame className="w-7 h-7" />
                     </div>
                     ألعاب الترند 2025
@@ -895,108 +1095,86 @@ export default function AITrend() {
                       value={trendSearchQuery}
                       onChange={(e) => setTrendSearchQuery(e.target.value)}
                       placeholder="ابحث في الترند..."
-                      className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-14 pr-12 w-72 rounded-2xl text-lg"
+                      className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-14 pr-12 w-72 rounded-[1.25rem] text-lg"
                     />
                   </div>
                   <Button
                     onClick={() => setShowHistory(!showHistory)}
                     variant="outline"
                     className={cn(
-                      "h-14 px-6 rounded-2xl border-white/10 transition-all duration-300",
-                      showHistory ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "hover:bg-white/5"
+                      "h-14 gap-2 rounded-[1.25rem] border-white/10 hover:bg-white/5",
+                      showHistory && "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                     )}
                   >
-                    <History className="w-5 h-5 ml-2" />
-                    سجل الترند
+                    <History className="w-5 h-5" />
+                    {showHistory ? "إخفاء السجل" : "سجل الترند"}
                   </Button>
                 </div>
               </div>
 
-              {/* History Section */}
+              {/* Trend History Section */}
               {showHistory && (
                 <div className="mb-10 animate-fade-in">
-                  <div className="bg-[#111118]/60 backdrop-blur-xl border border-white/5 rounded-3xl p-6">
-                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                      <History className="w-6 h-6 text-emerald-400" />
-                      سجل تاريخ الترند ({uniqueHistoryGames.length} لعبة)
-                    </h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {uniqueHistoryGames.map((game, index) => (
-                        <div
-                          key={index}
-                          className="bg-white/5 rounded-2xl p-4 hover:bg-white/10 transition-all duration-300 animate-fade-in"
-                          style={{ animationDelay: `${index * 30}ms` }}
+                  <div className="bg-[#111118]/80 backdrop-blur-xl rounded-[1.5rem] border border-white/5 p-6">
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                      <History className="w-5 h-5 text-emerald-400" />
+                      سجل الألعاب ({uniqueHistoryGames.length} لعبة)
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {uniqueHistoryGames.slice(0, 20).map((game, i) => (
+                        <div 
+                          key={i} 
+                          className="bg-white/5 rounded-[1rem] p-3 text-sm text-gray-300 hover:bg-white/10 transition-all duration-300"
                         >
-                          <div className="aspect-video bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-xl mb-3 overflow-hidden">
-                            {game.image ? (
-                              <img 
-                                src={game.image} 
-                                alt={game.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Gamepad2 className="w-8 h-8 text-emerald-400/50" />
-                              </div>
-                            )}
-                          </div>
-                          <h4 className="font-medium text-white text-sm line-clamp-1">{game.name}</h4>
-                          {game.fetchedAt && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(game.fetchedAt).toLocaleDateString('ar-SA')}
-                            </p>
-                          )}
+                          {game.name}
                         </div>
                       ))}
                     </div>
-                    {uniqueHistoryGames.length === 0 && (
-                      <p className="text-gray-400 text-center py-8">لا يوجد سجل حتى الآن</p>
-                    )}
                   </div>
                 </div>
               )}
 
-              {/* Loading State */}
-              {isLoadingTrends && (
-                <div className="text-center py-20">
-                  <div className="relative inline-block">
-                    <div className="w-24 h-24 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                    <Sparkles className="w-10 h-10 text-emerald-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-                  </div>
-                  <p className="text-gray-400 mt-6 text-lg">جاري البحث عن أحدث الألعاب...</p>
+              {/* Games Grid */}
+              {isLoadingTrends ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="w-20 h-20 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-6" />
+                  <p className="text-gray-400 text-lg">جاري جلب ألعاب الترند...</p>
                 </div>
-              )}
-
-              {/* Trending Games Grid */}
-              {!isLoadingTrends && (
+              ) : filteredTrendingGames.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredTrendingGames.map((game, index) => (
                     <div
                       key={index}
-                      className="group bg-[#111118]/60 backdrop-blur-xl border border-white/5 rounded-3xl overflow-hidden hover:border-emerald-500/30 transition-all duration-500 hover:shadow-2xl hover:shadow-emerald-500/10 hover:-translate-y-2 animate-fade-in"
+                      className="group bg-[#111118]/80 backdrop-blur-xl rounded-[1.5rem] border border-white/5 overflow-hidden hover:border-emerald-500/30 transition-all duration-500 hover:shadow-2xl hover:shadow-emerald-500/10 animate-fade-in"
                       style={{ animationDelay: `${index * 100}ms` }}
                     >
-                      <div className="aspect-[16/10] bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center relative overflow-hidden">
+                      <div className="aspect-video bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 relative overflow-hidden">
                         {game.image ? (
-                          <img 
-                            src={game.image} 
+                          <img
+                            src={game.image}
                             alt={game.name}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
                           />
-                        ) : (
-                          <Gamepad2 className="w-16 h-16 text-emerald-400/50" />
-                        )}
-                        <div className="absolute top-4 right-4 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1.5 shadow-lg animate-pulse">
+                        ) : null}
+                        <div className={cn("absolute inset-0 flex items-center justify-center", game.image && "hidden")}>
+                          <Gamepad2 className="w-16 h-16 text-emerald-400/30" />
+                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#111118] to-transparent opacity-60" />
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-emerald-500/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
                           <Flame className="w-3.5 h-3.5" />
-                          Trending
+                          <span className="text-xs font-medium">Trending</span>
                         </div>
                       </div>
-                      <div className="p-5">
-                        <h3 className="font-bold text-white text-xl mb-3 line-clamp-1">{game.name}</h3>
+                      <div className="p-5 space-y-3">
+                        <h3 className="font-bold text-white text-lg group-hover:text-emerald-400 transition-colors line-clamp-1">
+                          {game.name}
+                        </h3>
                         {game.genres && game.genres.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-3">
+                          <div className="flex flex-wrap gap-1.5">
                             {game.genres.map((genre, i) => (
                               <span
                                 key={i}
@@ -1017,11 +1195,9 @@ export default function AITrend() {
                     </div>
                   ))}
                 </div>
-              )}
-
-              {trendingGames.length === 0 && !isLoadingTrends && (
+              ) : (
                 <div className="text-center py-20">
-                  <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 mx-auto flex items-center justify-center mb-6">
+                  <div className="w-24 h-24 rounded-[1.5rem] bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 mx-auto flex items-center justify-center mb-6">
                     <TrendingUp className="w-12 h-12 text-emerald-400/50" />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-3">لا توجد ألعاب ترند</h3>
@@ -1042,13 +1218,13 @@ export default function AITrend() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="md:hidden hover:bg-white/5 rounded-xl"
+                className="md:hidden hover:bg-white/5 rounded-[0.75rem]"
               >
                 <Menu className="w-5 h-5" />
               </Button>
               
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
+                <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-r from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
                   <img src="/favicon.png" alt="KTM AI" className="w-8 h-8" />
                 </div>
                 <div>
@@ -1093,12 +1269,12 @@ export default function AITrend() {
                           setInput(item.text);
                           inputRef.current?.focus();
                         }}
-                        className="group p-6 rounded-3xl bg-white/5 border border-white/5 hover:border-emerald-500/30 transition-all duration-500 text-right hover:bg-white/10 hover:shadow-xl hover:shadow-emerald-500/5 animate-fade-in"
+                        className="group p-6 rounded-[1.5rem] bg-white/5 border border-white/5 hover:border-emerald-500/30 transition-all duration-500 text-right hover:bg-white/10 hover:shadow-xl hover:shadow-emerald-500/5 animate-fade-in"
                         style={{ animationDelay: `${i * 100}ms` }}
                       >
                         <div className="flex items-center gap-4">
                           <div className={cn(
-                            "w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300",
+                            "w-14 h-14 rounded-[1rem] flex items-center justify-center transition-all duration-300",
                             item.color === "emerald" && "bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:shadow-lg group-hover:shadow-emerald-500/20",
                             item.color === "cyan" && "bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20 group-hover:shadow-lg group-hover:shadow-cyan-500/20",
                             item.color === "purple" && "bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20 group-hover:shadow-lg group-hover:shadow-purple-500/20",
@@ -1124,7 +1300,7 @@ export default function AITrend() {
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
                       <div className={cn(
-                        "w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg",
+                        "w-12 h-12 rounded-[1rem] flex-shrink-0 flex items-center justify-center shadow-lg",
                         message.role === "assistant"
                           ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-emerald-500/20"
                           : "bg-white/10"
@@ -1133,7 +1309,7 @@ export default function AITrend() {
                           <img src="/favicon.png" alt="AI" className="w-7 h-7" />
                         ) : (
                           profile?.avatar_url ? (
-                            <img src={profile.avatar_url} alt="User" className="w-full h-full rounded-2xl object-cover" />
+                            <img src={profile.avatar_url} alt="User" className="w-full h-full rounded-[1rem] object-cover" />
                           ) : (
                             <span className="text-lg font-bold">{profile?.first_name?.[0] || "U"}</span>
                           )
@@ -1141,11 +1317,11 @@ export default function AITrend() {
                       </div>
                       
                       <div className={cn(
-                        "flex-1 max-w-[85%]",
+                        "flex-1",
                         message.role === "user" ? "text-left" : ""
                       )}>
                         <div className={cn(
-                          "rounded-3xl p-6",
+                          "rounded-[1.5rem] p-6 inline-block max-w-full",
                           message.role === "assistant"
                             ? "bg-[#111118]/80 border border-white/5 backdrop-blur-xl"
                             : "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-xl shadow-emerald-500/20"
@@ -1159,17 +1335,16 @@ export default function AITrend() {
                               </div>
                               <span className="text-gray-400 text-sm">جاري التفكير...</span>
                             </div>
-                          ) : (
-                            <div className={cn(
-                              "leading-relaxed text-lg",
-                              message.role === "assistant" ? "text-gray-200" : ""
-                            )}>
-                              {message.role === "assistant" && message.isAnimating ? (
-                                <AnimatedWords text={message.content} />
+                          ) : message.role === "assistant" ? (
+                            <div className="text-gray-200">
+                              {message.isAnimating ? (
+                                <StreamingText content={message.content} />
                               ) : (
-                                <span className="whitespace-pre-wrap">{message.content}</span>
+                                <FormattedContent content={message.content} />
                               )}
                             </div>
+                          ) : (
+                            <span className="whitespace-pre-wrap text-lg">{message.content}</span>
                           )}
                         </div>
                         <div className={cn(
@@ -1224,7 +1399,7 @@ export default function AITrend() {
                   <Button
                     onClick={() => sendMessage()}
                     disabled={isLoading || !input.trim()}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-2xl shadow-xl shadow-emerald-500/30 disabled:opacity-50 transition-all duration-300 hover:shadow-emerald-500/50"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-[1rem] shadow-xl shadow-emerald-500/30 disabled:opacity-50 transition-all duration-300 hover:shadow-emerald-500/50"
                   >
                     {isLoading ? (
                       <Loader2 className="w-6 h-6 animate-spin" />
