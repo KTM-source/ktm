@@ -31,8 +31,21 @@ import {
   Bold,
   List,
   Code,
+  ExternalLink,
+  Image as ImageIcon,
+  ZoomIn,
+  AlertTriangle,
+  Table,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Message {
   id: string;
@@ -65,60 +78,402 @@ interface TrendHistory {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-trend-chat`;
 
-// Markdown-style content parser for rich formatting
-const FormattedContent = ({ content, isAnimating }: { content: string; isAnimating?: boolean }) => {
-  const formatText = (text: string) => {
-    // Split into lines for processing
-    const lines = text.split('\n');
-    
-    return lines.map((line, lineIndex) => {
-      // Bold text: **text**
-      let processedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>');
-      
-      // Bullet points: - text or • text
-      if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
-        processedLine = `<span class="flex gap-2"><span class="text-emerald-400">•</span><span>${processedLine.replace(/^[-•]\s*/, '')}</span></span>`;
-      }
-      
-      // Numbered lists: 1. text
-      const numberedMatch = line.match(/^(\d+)\.\s+(.*)$/);
-      if (numberedMatch) {
-        processedLine = `<span class="flex gap-2"><span class="text-emerald-400 font-semibold">${numberedMatch[1]}.</span><span>${numberedMatch[2]}</span></span>`;
-      }
-      
-      // Code blocks: `code`
-      processedLine = processedLine.replace(/`([^`]+)`/g, '<code class="bg-white/10 px-2 py-0.5 rounded-lg text-emerald-300 font-mono text-sm">$1</code>');
-      
-      // Headings: ## text
-      if (line.startsWith('## ')) {
-        processedLine = `<span class="text-xl font-bold text-emerald-400 block mt-4 mb-2">${line.slice(3)}</span>`;
-      } else if (line.startsWith('# ')) {
-        processedLine = `<span class="text-2xl font-bold text-white block mt-4 mb-2">${line.slice(2)}</span>`;
-      }
-      
-      // Horizontal rule: ---
-      if (line.trim() === '---') {
-        return <hr key={lineIndex} className="border-white/10 my-4" />;
-      }
-      
-      return (
-        <span 
-          key={lineIndex} 
-          className="block"
-          dangerouslySetInnerHTML={{ __html: processedLine || '&nbsp;' }}
-        />
-      );
-    });
-  };
-
+// Image Lightbox Component
+const ImageLightbox = ({ 
+  src, 
+  alt, 
+  isOpen, 
+  onClose 
+}: { 
+  src: string; 
+  alt: string; 
+  isOpen: boolean; 
+  onClose: () => void;
+}) => {
+  if (!isOpen) return null;
+  
   return (
-    <div className="leading-relaxed text-lg space-y-1">
-      {formatText(content)}
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl animate-fade-in"
+      onClick={onClose}
+    >
+      <button 
+        onClick={onClose}
+        className="absolute top-6 right-6 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-300"
+      >
+        <X className="w-6 h-6 text-white" />
+      </button>
+      <img 
+        src={src} 
+        alt={alt} 
+        className="max-w-[90vw] max-h-[90vh] object-contain rounded-2xl shadow-2xl animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      />
     </div>
   );
 };
 
-// Character-by-character animated text with proper buffering
+// Rich content parser with tables, images, links support
+const RichContent = ({ 
+  content, 
+  isAnimating,
+  displayedLength 
+}: { 
+  content: string; 
+  isAnimating?: boolean;
+  displayedLength?: number;
+}) => {
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  
+  // Use only displayed portion if animating
+  const textToRender = isAnimating && displayedLength !== undefined 
+    ? content.slice(0, displayedLength) 
+    : content;
+
+  const parseContent = (text: string) => {
+    const elements: React.ReactNode[] = [];
+    const lines = text.split('\n');
+    let i = 0;
+    let tableBuffer: string[] = [];
+    let inTable = false;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      
+      // Detect table (lines with | characters)
+      if (line.includes('|') && line.trim().startsWith('|')) {
+        if (!inTable) {
+          inTable = true;
+          tableBuffer = [];
+        }
+        tableBuffer.push(line);
+        i++;
+        continue;
+      } else if (inTable) {
+        // End of table
+        elements.push(renderTable(tableBuffer, elements.length));
+        tableBuffer = [];
+        inTable = false;
+      }
+
+      // Empty line
+      if (line.trim() === '') {
+        elements.push(<div key={`empty-${i}`} className="h-3" />);
+        i++;
+        continue;
+      }
+
+      // Horizontal rule
+      if (line.trim() === '---' || line.trim() === '***') {
+        elements.push(
+          <hr key={`hr-${i}`} className="border-white/10 my-6" />
+        );
+        i++;
+        continue;
+      }
+
+      // Headings
+      if (line.startsWith('### ')) {
+        elements.push(
+          <h3 key={`h3-${i}`} className="text-lg font-bold text-emerald-400 mt-4 mb-2 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            {parseInlineFormatting(line.slice(4))}
+          </h3>
+        );
+        i++;
+        continue;
+      }
+      if (line.startsWith('## ')) {
+        elements.push(
+          <h2 key={`h2-${i}`} className="text-xl font-bold text-white mt-5 mb-3">
+            {parseInlineFormatting(line.slice(3))}
+          </h2>
+        );
+        i++;
+        continue;
+      }
+      if (line.startsWith('# ')) {
+        elements.push(
+          <h1 key={`h1-${i}`} className="text-2xl font-bold text-white mt-5 mb-3">
+            {parseInlineFormatting(line.slice(2))}
+          </h1>
+        );
+        i++;
+        continue;
+      }
+
+      // Code blocks
+      if (line.startsWith('```')) {
+        const lang = line.slice(3).trim();
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        elements.push(
+          <pre key={`code-${i}`} className="bg-black/40 rounded-xl p-4 my-4 overflow-x-auto border border-white/5">
+            <code className="text-sm font-mono text-emerald-300">
+              {codeLines.join('\n')}
+            </code>
+          </pre>
+        );
+        i++;
+        continue;
+      }
+
+      // Bullet points
+      if (line.trim().startsWith('- ') || line.trim().startsWith('• ') || line.trim().startsWith('* ')) {
+        const bulletContent = line.replace(/^[\s]*[-•*]\s*/, '');
+        elements.push(
+          <div key={`bullet-${i}`} className="flex gap-3 my-1.5 mr-2">
+            <span className="text-emerald-400 mt-0.5">•</span>
+            <span className="flex-1">{parseInlineFormatting(bulletContent)}</span>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      // Numbered lists
+      const numberedMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      if (numberedMatch) {
+        elements.push(
+          <div key={`num-${i}`} className="flex gap-3 my-1.5 mr-2">
+            <span className="text-emerald-400 font-semibold min-w-[1.5rem]">{numberedMatch[1]}.</span>
+            <span className="flex-1">{parseInlineFormatting(numberedMatch[2])}</span>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      // Regular paragraph
+      elements.push(
+        <p key={`p-${i}`} className="my-2 leading-relaxed">
+          {parseInlineFormatting(line)}
+        </p>
+      );
+      i++;
+    }
+
+    // Handle remaining table
+    if (inTable && tableBuffer.length > 0) {
+      elements.push(renderTable(tableBuffer, elements.length));
+    }
+
+    return elements;
+  };
+
+  const renderTable = (tableLines: string[], key: number) => {
+    if (tableLines.length < 2) return null;
+    
+    const parseRow = (line: string) => {
+      return line.split('|').filter(cell => cell.trim() !== '').map(cell => cell.trim());
+    };
+    
+    const headers = parseRow(tableLines[0]);
+    // Skip separator line (contains ---)
+    const dataRows = tableLines.slice(2).map(parseRow);
+    
+    return (
+      <div key={`table-${key}`} className="my-6 overflow-x-auto animate-fade-in">
+        <table className="w-full border-collapse rounded-xl overflow-hidden bg-[#0d1117]/80 backdrop-blur-xl">
+          <thead>
+            <tr className="bg-gradient-to-r from-emerald-500/20 to-cyan-500/20">
+              {headers.map((header, i) => (
+                <th 
+                  key={i} 
+                  className="px-4 py-3 text-right text-sm font-bold text-emerald-400 border-b border-white/10"
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dataRows.map((row, rowIndex) => (
+              <tr 
+                key={rowIndex} 
+                className="border-b border-white/5 hover:bg-white/5 transition-colors"
+              >
+                {row.map((cell, cellIndex) => (
+                  <td 
+                    key={cellIndex} 
+                    className="px-4 py-3 text-sm text-gray-300"
+                  >
+                    {parseInlineFormatting(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const parseInlineFormatting = (text: string): React.ReactNode[] => {
+    const elements: React.ReactNode[] = [];
+    let remaining = text;
+    let keyCounter = 0;
+
+    // Image URLs - convert to actual images
+    const imageRegex = /\[?(https?:\/\/[^\s\]]+\.(jpg|jpeg|png|gif|webp)(\?[^\s\]]*)?)\]?(\([^\)]*\))?/gi;
+    
+    // Links - [text](url) or plain URLs
+    const linkRegex = /\[([^\]]+)\]\(([^\)]+)\)/g;
+    const plainUrlRegex = /(https?:\/\/[^\s]+)/g;
+    
+    // Bold - **text**
+    const boldRegex = /\*\*([^*]+)\*\*/g;
+    
+    // Inline code - `code`
+    const codeRegex = /`([^`]+)`/g;
+
+    // Process in order: images first, then links, then formatting
+    let result = remaining;
+    const imageMatches: { match: string; url: string; index: number }[] = [];
+    
+    let imgMatch;
+    while ((imgMatch = imageRegex.exec(result)) !== null) {
+      imageMatches.push({
+        match: imgMatch[0],
+        url: imgMatch[1],
+        index: imgMatch.index
+      });
+    }
+
+    if (imageMatches.length > 0) {
+      let lastIndex = 0;
+      imageMatches.forEach((img, idx) => {
+        // Add text before image
+        if (img.index > lastIndex) {
+          const beforeText = result.slice(lastIndex, img.index);
+          elements.push(...parseTextFormatting(beforeText, keyCounter++));
+        }
+        
+        // Add image
+        elements.push(
+          <div key={`img-${keyCounter++}`} className="my-4">
+            <div 
+              className="relative group cursor-pointer inline-block"
+              onClick={() => setLightboxImage(img.url)}
+            >
+              <img 
+                src={img.url} 
+                alt="صورة" 
+                className="max-w-full h-auto rounded-xl border border-white/10 shadow-xl hover:shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02]"
+                style={{ maxHeight: '300px' }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 rounded-xl transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <ZoomIn className="w-8 h-8 text-white drop-shadow-lg" />
+              </div>
+            </div>
+          </div>
+        );
+        
+        lastIndex = img.index + img.match.length;
+      });
+      
+      // Add remaining text
+      if (lastIndex < result.length) {
+        elements.push(...parseTextFormatting(result.slice(lastIndex), keyCounter++));
+      }
+    } else {
+      elements.push(...parseTextFormatting(result, keyCounter));
+    }
+
+    return elements;
+  };
+
+  const parseTextFormatting = (text: string, startKey: number): React.ReactNode[] => {
+    const elements: React.ReactNode[] = [];
+    let remaining = text;
+    let key = startKey;
+
+    // Process links [text](url)
+    const parts = remaining.split(/(\[[^\]]+\]\([^\)]+\))/g);
+    
+    parts.forEach((part, i) => {
+      const linkMatch = part.match(/\[([^\]]+)\]\(([^\)]+)\)/);
+      if (linkMatch) {
+        elements.push(
+          <a 
+            key={`link-${key++}`}
+            href={linkMatch[2]} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 inline-flex items-center gap-1 transition-colors"
+          >
+            {linkMatch[1]}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        );
+      } else if (part) {
+        // Process bold and code
+        const formattedParts = part.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+        formattedParts.forEach((fp, j) => {
+          if (fp.startsWith('**') && fp.endsWith('**')) {
+            elements.push(
+              <strong key={`bold-${key++}`} className="font-bold text-white">
+                {fp.slice(2, -2)}
+              </strong>
+            );
+          } else if (fp.startsWith('`') && fp.endsWith('`')) {
+            elements.push(
+              <code key={`code-${key++}`} className="bg-white/10 px-2 py-0.5 rounded-lg text-emerald-300 font-mono text-sm">
+                {fp.slice(1, -1)}
+              </code>
+            );
+          } else if (fp) {
+            // Check for plain URLs
+            const urlParts = fp.split(/(https?:\/\/[^\s]+)/g);
+            urlParts.forEach((up, k) => {
+              if (up.match(/^https?:\/\//)) {
+                elements.push(
+                  <a 
+                    key={`url-${key++}`}
+                    href={up} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 inline-flex items-center gap-1 transition-colors break-all"
+                  >
+                    {up.length > 50 ? up.slice(0, 50) + '...' : up}
+                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                  </a>
+                );
+              } else if (up) {
+                elements.push(<span key={`text-${key++}`}>{up}</span>);
+              }
+            });
+          }
+        });
+      }
+    });
+
+    return elements;
+  };
+
+  return (
+    <>
+      <div className="leading-relaxed text-lg">
+        {parseContent(textToRender)}
+      </div>
+      <ImageLightbox 
+        src={lightboxImage || ''} 
+        alt="صورة مكبرة" 
+        isOpen={!!lightboxImage} 
+        onClose={() => setLightboxImage(null)} 
+      />
+    </>
+  );
+};
+
+// Streaming text with character animation
 const StreamingText = ({ 
   content, 
   onComplete 
@@ -127,29 +482,14 @@ const StreamingText = ({
   onComplete?: () => void;
 }) => {
   const [displayedChars, setDisplayedChars] = useState(0);
-  const animationRef = useRef<number | null>(null);
-  const lastContentRef = useRef(content);
+  const prevContentRef = useRef(content);
   
   useEffect(() => {
-    // If content grew, continue animating
-    if (content.length > lastContentRef.current.length) {
-      lastContentRef.current = content;
+    // If content changed, continue from current position
+    if (content !== prevContentRef.current) {
+      prevContentRef.current = content;
     }
     
-    // Animate each character
-    const animate = () => {
-      setDisplayedChars(prev => {
-        if (prev < content.length) {
-          animationRef.current = requestAnimationFrame(animate);
-          return prev + 1;
-        } else {
-          if (onComplete) onComplete();
-          return prev;
-        }
-      });
-    };
-    
-    // Start animation with slight delay between chars
     const interval = setInterval(() => {
       setDisplayedChars(prev => {
         if (prev < content.length) {
@@ -160,20 +500,64 @@ const StreamingText = ({
           return prev;
         }
       });
-    }, 15); // 15ms per character for smooth reveal
+    }, 12);
     
-    return () => {
-      clearInterval(interval);
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
+    return () => clearInterval(interval);
   }, [content, onComplete]);
 
-  const visibleContent = content.slice(0, displayedChars);
-  
   return (
-    <FormattedContent content={visibleContent} isAnimating={displayedChars < content.length} />
+    <RichContent 
+      content={content} 
+      isAnimating={displayedChars < content.length}
+      displayedLength={displayedChars}
+    />
+  );
+};
+
+// Delete confirmation dialog
+const DeleteConfirmDialog = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  title
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+}) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="bg-[#111118]/95 backdrop-blur-3xl border-white/10 rounded-[2rem] max-w-md">
+        <DialogHeader>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8 text-red-400" />
+          </div>
+          <DialogTitle className="text-xl text-center text-white">حذف المحادثة</DialogTitle>
+          <DialogDescription className="text-center text-gray-400 mt-2">
+            هل أنت متأكد من حذف "{title}"؟
+            <br />
+            <span className="text-red-400 text-sm">لا يمكن التراجع عن هذا الإجراء</span>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex gap-3 mt-6">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 h-12 rounded-xl border-white/10 hover:bg-white/5"
+          >
+            إلغاء
+          </Button>
+          <Button
+            onClick={onConfirm}
+            className="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white"
+          >
+            <Trash2 className="w-4 h-4 ml-2" />
+            حذف
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -202,6 +586,11 @@ export default function AITrend() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; convId: string; title: string }>({
+    isOpen: false,
+    convId: '',
+    title: ''
+  });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -234,29 +623,27 @@ export default function AITrend() {
         setTrendingGames(JSON.parse(cached));
         setLastTrendUpdate(lastUpdate);
       } else {
-        // Auto-refresh after 24 hours
         fetchTrendingGames();
       }
     } else if (isAuthenticated) {
-      // Auto-fetch if no games
       fetchTrendingGames();
     }
   }, [isAuthenticated]);
 
-  // Generate suggestions based on last AI message
+  // Generate smart suggestions based on context
   useEffect(() => {
     if (messages.length > 0) {
       const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant");
       if (lastAssistantMsg && lastAssistantMsg.content) {
-        generateSuggestions(lastAssistantMsg.content);
+        generateSmartSuggestions(lastAssistantMsg.content, messages);
       }
     } else {
       setSuggestions([
-        "ما هي أحدث الألعاب الترند؟",
-        "أخبرني عن إحصائيات الموقع",
-        "ابحث لي عن ألعاب أكشن",
-        "ما الجديد في عالم الألعاب؟",
-        "أريد توصيات ألعاب مغامرات",
+        "ابحث لي عن أحدث ألعاب 2025 الترند",
+        "أعطني إحصائيات موقع كَتَم",
+        "قارن بين لعبتين من اختيارك",
+        "اقترح لي ألعاب أكشن جديدة",
+        "أخبرني عن أفضل ألعاب RPG",
       ]);
     }
   }, [messages]);
@@ -280,8 +667,11 @@ export default function AITrend() {
     }
   }, [conversationId]);
 
-  const generateSuggestions = async (lastMessage: string) => {
+  const generateSmartSuggestions = async (lastMessage: string, allMessages: Message[]) => {
     try {
+      // Get conversation context
+      const context = allMessages.slice(-4).map(m => `${m.role}: ${m.content.slice(0, 100)}`).join('\n');
+      
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -291,9 +681,25 @@ export default function AITrend() {
         body: JSON.stringify({
           messages: [{
             role: "user",
-            content: `بناءً على هذه الرسالة: "${lastMessage.slice(0, 200)}"
-ولد 5 اقتراحات قصيرة للمتابعة. كل اقتراح يكون سؤال أو طلب مختصر (أقل من 8 كلمات).
-أرجع JSON فقط بهذا الشكل: ["اقتراح1", "اقتراح2", "اقتراح3", "اقتراح4", "اقتراح5"]`
+            content: `بناءً على هذه المحادثة:
+${context}
+
+ولد 5 اقتراحات ذكية للمتابعة. كل اقتراح يجب أن يكون:
+1. طلب أو أمر مباشر للذكاء الاصطناعي (وليس سؤال عن المستخدم)
+2. متعلق بموضوع المحادثة
+3. مفيد ومختصر (4-8 كلمات)
+
+أمثلة صحيحة:
+- "قارن هذه اللعبة مع Elden Ring"
+- "أعطني المزيد من التفاصيل"
+- "ابحث عن ألعاب مشابهة"
+- "اشرح نظام اللعب بالتفصيل"
+
+أمثلة خاطئة (لا تستخدمها):
+- "ما هي ألعابك المفضلة؟" ❌
+- "هل تحب الأكشن؟" ❌
+
+أرجع JSON فقط: ["اقتراح1", "اقتراح2", "اقتراح3", "اقتراح4", "اقتراح5"]`
           }],
           userContext: { name: "System", email: "system@ktm.com" },
         }),
@@ -454,7 +860,6 @@ ${context}
     navigate("/ktm-admin-panel");
   };
 
-  // Start a new pending conversation (without creating in DB)
   const startNewConversation = () => {
     setPendingConversation(true);
     setCurrentConversation(null);
@@ -462,9 +867,13 @@ ${context}
     navigate("/ktm/ai/trend");
   };
 
-  const deleteConversation = async (convId: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذه المحادثة؟")) return;
+  const openDeleteDialog = (convId: string, title: string) => {
+    setDeleteDialog({ isOpen: true, convId, title });
+  };
 
+  const confirmDelete = async () => {
+    const { convId } = deleteDialog;
+    
     const { error } = await supabase
       .from("ai_conversations")
       .delete()
@@ -477,6 +886,8 @@ ${context}
       }
       toast.success("تم حذف المحادثة");
     }
+    
+    setDeleteDialog({ isOpen: false, convId: '', title: '' });
   };
 
   const scrollToBottom = () => {
@@ -491,7 +902,6 @@ ${context}
     setIsLoadingTrends(true);
     
     try {
-      // Get existing games to exclude
       const { data: existingGames } = await supabase
         .from("games")
         .select("title");
@@ -507,27 +917,21 @@ ${context}
         body: JSON.stringify({
           messages: [{
             role: "user",
-            content: `ابحث عن أحدث 15 لعبة ترند ومشهورة لسنة 2025 التي صدرت بالفعل وقابلة للتحميل الآن.
-            
-⚠️ تعليمات صارمة:
-1. فقط الألعاب التي صدرت بالفعل ومتاحة للتحميل الآن
-2. لا تضمن أي لعبة لم تصدر بعد مثل GTA 6 أو أي لعبة قادمة
-3. استبعد هذه الألعاب: ${existingTitles.slice(0, 30).join(", ")}
-4. لكل لعبة، ابحث عن رابط صورة حقيقي مباشر من:
-   - Steam CDN: https://cdn.akamai.steamstatic.com/steam/apps/[APPID]/header.jpg
-   - أو IGDB أو أي مصدر موثوق آخر
-5. التصنيفات يجب أن تكون بالإنجليزية (Action, RPG, Adventure, etc)
+            content: `ابحث عن 15 لعبة ترند لسنة 2025 صدرت فعلاً.
 
-أرجع JSON فقط بهذا الشكل الدقيق:
-[{"name": "Game Name", "image": "https://cdn.akamai.steamstatic.com/steam/apps/XXXXX/header.jpg", "genres": ["Action", "RPG"], "platform": "PC, PS5, Xbox"}]
+استبعد: ${existingTitles.slice(0, 30).join(", ")}
 
-مهم جداً: رابط الصورة يجب أن يكون رابط مباشر يعمل وينتهي بـ .jpg أو .png`
+لكل لعبة استخدم Steam CDN:
+https://cdn.akamai.steamstatic.com/steam/apps/[APPID]/header.jpg
+
+أرجع JSON فقط:
+[{"name": "Game", "image": "URL", "genres": ["Action"], "platform": "PC"}]`
           }],
           userContext: { name: "System", email: "system@ktm.com" },
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to fetch trends");
+      if (!response.ok) throw new Error("Failed");
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -541,7 +945,6 @@ ${context}
         }
       }
 
-      // Extract JSON from SSE response
       const lines = fullResponse.split("\n");
       let content = "";
       
@@ -554,23 +957,16 @@ ${context}
         }
       }
 
-      // Try to parse JSON from content
       const jsonMatch = content.match(/\[[\s\S]*?\]/);
       if (jsonMatch) {
         const games: TrendingGame[] = JSON.parse(jsonMatch[0]);
-        // Filter out existing games and unreleased games
         const filtered = games.filter((g: TrendingGame) => 
-          !existingTitles.includes(g.name.toLowerCase()) &&
-          !g.name.toLowerCase().includes("gta 6") &&
-          !g.name.toLowerCase().includes("grand theft auto vi") &&
-          !g.name.toLowerCase().includes("2026") &&
-          !g.name.toLowerCase().includes("coming soon")
+          !existingTitles.includes(g.name.toLowerCase())
         ).slice(0, 10).map(g => ({
           ...g,
           fetchedAt: new Date().toISOString()
         }));
         
-        // Save to history
         const newHistory: TrendHistory = {
           games: filtered,
           fetchedAt: new Date().toISOString()
@@ -587,8 +983,8 @@ ${context}
         toast.success("تم تحديث ألعاب الترند!");
       }
     } catch (error) {
-      console.error("Error fetching trends:", error);
-      toast.error("حدث خطأ في جلب الألعاب");
+      console.error("Error:", error);
+      toast.error("خطأ في جلب الألعاب");
     } finally {
       setIsLoadingTrends(false);
     }
@@ -604,7 +1000,6 @@ ${context}
 
     let convId = currentConversation;
 
-    // Create new conversation only on first message
     if (!convId) {
       const { data, error } = await supabase
         .from("ai_conversations")
@@ -613,7 +1008,7 @@ ${context}
         .single();
 
       if (error || !data) {
-        toast.error("حدث خطأ في إنشاء المحادثة");
+        toast.error("حدث خطأ");
         return;
       }
 
@@ -627,7 +1022,6 @@ ${context}
     setInput("");
     setIsLoading(true);
 
-    // Add user message to UI (don't replace it)
     const userMsgId = `user-${Date.now()}`;
     const tempUserMsg: Message = {
       id: userMsgId,
@@ -636,7 +1030,6 @@ ${context}
       created_at: new Date().toISOString(),
     };
     
-    // Add loading message for assistant
     const loadingMsgId = `loading-${Date.now()}`;
     const loadingMsg: Message = {
       id: loadingMsgId,
@@ -648,7 +1041,6 @@ ${context}
     
     setMessages(prev => [...prev, tempUserMsg, loadingMsg]);
 
-    // Save user message to DB
     await supabase.from("ai_messages").insert({
       conversation_id: convId,
       role: "user",
@@ -667,10 +1059,8 @@ ${context}
         body: JSON.stringify({
           messages: messages
             .filter(m => !m.id.startsWith('loading-'))
-            .map(m => ({
-              role: m.role,
-              content: m.content,
-            })).concat([{ role: "user", content: textToSend }]),
+            .map(m => ({ role: m.role, content: m.content }))
+            .concat([{ role: "user", content: textToSend }]),
           userContext: {
             name: profile?.first_name || "مستخدم",
             email: user.email,
@@ -679,9 +1069,7 @@ ${context}
         }),
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error("Failed to get response");
-      }
+      if (!response.ok || !response.body) throw new Error("Failed");
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -710,7 +1098,6 @@ ${context}
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               assistantContent += content;
-              // Update only the assistant message, preserve user message
               setMessages(prev => 
                 prev.map(msg => 
                   msg.id === loadingMsgId 
@@ -719,42 +1106,33 @@ ${context}
                 )
               );
             }
-          } catch {
-            // Incomplete JSON
-          }
+          } catch {}
         }
       }
 
-      // Save assistant message to DB
-      await supabase
-        .from("ai_messages")
-        .insert({
-          conversation_id: convId,
-          role: "assistant",
-          content: assistantContent,
-        });
+      await supabase.from("ai_messages").insert({
+        conversation_id: convId,
+        role: "assistant",
+        content: assistantContent,
+      });
 
-      // Generate AI title after first exchange
       const allMessages = [...messages, tempUserMsg, { ...loadingMsg, content: assistantContent }];
       if (allMessages.filter(m => m.role === "user").length <= 2) {
         generateConversationTitle(allMessages, convId);
       }
 
-      // Update final message state
       setMessages(prev => 
         prev.map(msg => 
-          msg.id === loadingMsgId 
-            ? { ...msg, isAnimating: false }
-            : msg
+          msg.id === loadingMsgId ? { ...msg, isAnimating: false } : msg
         )
       );
 
     } catch (error) {
-      console.error("Chat error:", error);
+      console.error("Error:", error);
       setMessages(prev => 
         prev.map(msg => 
           msg.id === loadingMsgId 
-            ? { ...msg, content: "عذراً، حدث خطأ. حاول مرة أخرى.", isAnimating: false }
+            ? { ...msg, content: "عذراً، حدث خطأ.", isAnimating: false }
             : msg
         )
       );
@@ -768,6 +1146,11 @@ ${context}
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInput(suggestion);
+    inputRef.current?.focus();
   };
 
   const filteredTrendingGames = trendingGames.filter(game =>
@@ -793,55 +1176,36 @@ ${context}
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0d1117] to-[#0a0a0f] flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Animated background */}
         <div className="absolute inset-0">
           <div className="absolute top-1/4 left-1/4 w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-[200px] animate-pulse" />
           <div className="absolute bottom-1/4 right-1/4 w-[800px] h-[800px] bg-cyan-500/5 rounded-full blur-[200px] animate-pulse" style={{ animationDelay: '1.5s' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/3 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '0.75s' }} />
-          
-          {/* Floating particles */}
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-emerald-400/30 rounded-full animate-float"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 5}s`,
-                animationDuration: `${5 + Math.random() * 5}s`,
-              }}
-            />
-          ))}
         </div>
 
         <div className="w-full max-w-md relative z-10">
-          <div className="bg-[#111118]/60 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-10 shadow-2xl shadow-emerald-500/10">
+          <div className="bg-[#111118]/60 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-10 shadow-2xl shadow-emerald-500/10">
             <div className="text-center mb-10">
               <div className="mx-auto w-28 h-28 rounded-[2rem] flex items-center justify-center mb-8 bg-gradient-to-br from-emerald-500 via-cyan-500 to-emerald-400 shadow-2xl shadow-emerald-500/40 animate-float">
-                <img src="/favicon.png" alt="KTM" className="w-16 h-16 drop-shadow-2xl" />
+                <img src="/favicon.png" alt="KTM" className="w-16 h-16" />
               </div>
-              <h1 className="text-5xl font-bold bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent mb-3">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-3">
                 KTM AI Trend
               </h1>
-              <p className="text-gray-400 text-xl">مساعدك الذكي لاكتشاف الترند</p>
+              <p className="text-gray-400 text-lg">مساعدك الذكي</p>
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-6">
               <div className="relative group">
-                <Lock className="absolute right-5 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500 group-focus-within:text-emerald-400 transition-all duration-300" />
+                <Lock className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-emerald-400 transition-all" />
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="كلمة السر"
-                  className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-16 pr-14 text-xl rounded-[1.5rem] placeholder:text-gray-500 transition-all duration-300 focus:shadow-lg focus:shadow-emerald-500/10"
+                  className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-14 pr-12 text-lg rounded-[1rem]"
                 />
               </div>
-              <Button 
-                type="submit" 
-                className="w-full h-16 bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 hover:from-emerald-600 hover:via-cyan-600 hover:to-emerald-600 text-white font-bold text-xl rounded-[1.5rem] shadow-xl shadow-emerald-500/30 transition-all duration-500 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <Sparkles className="w-6 h-6 ml-3 animate-pulse" />
+              <Button type="submit" className="w-full h-14 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-bold text-lg rounded-[1rem] shadow-xl shadow-emerald-500/30">
+                <Sparkles className="w-5 h-5 ml-2" />
                 دخول
               </Button>
             </form>
@@ -854,13 +1218,13 @@ ${context}
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0d1117] to-[#0a0a0f] flex items-center justify-center p-4">
-        <div className="text-center bg-[#111118]/60 backdrop-blur-3xl border border-white/10 p-12 rounded-[2.5rem] shadow-2xl">
-          <div className="w-24 h-24 mx-auto mb-8 rounded-[2rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
+        <div className="text-center bg-[#111118]/60 backdrop-blur-3xl border border-white/10 p-12 rounded-[2rem] shadow-2xl">
+          <div className="w-24 h-24 mx-auto mb-8 rounded-[1.5rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
             <img src="/favicon.png" alt="KTM" className="w-14 h-14" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">يجب تسجيل الدخول</h1>
-          <p className="text-gray-400 mb-8 text-xl">سجل دخولك للوصول إلى KTM AI Trend</p>
-          <Button onClick={() => navigate("/auth")} className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 px-10 py-4 text-xl rounded-[1.5rem] shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:shadow-emerald-500/50">
+          <h1 className="text-3xl font-bold text-white mb-4">يجب تسجيل الدخول</h1>
+          <p className="text-gray-400 mb-8 text-lg">سجل دخولك للوصول</p>
+          <Button onClick={() => navigate("/auth")} className="bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 py-3 text-lg rounded-[1rem]">
             تسجيل الدخول
           </Button>
         </div>
@@ -870,64 +1234,57 @@ ${context}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0d1117] to-[#0a0a0f] flex" dir="ltr">
-      {/* Background effects */}
+      <DeleteConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, convId: '', title: '' })}
+        onConfirm={confirmDelete}
+        title={deleteDialog.title}
+      />
+
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[200px]" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[200px]" />
       </div>
 
       {/* Sidebar */}
-      <div
-        className={cn(
-          "fixed md:relative z-50 h-screen bg-[#111118]/90 backdrop-blur-3xl border-r border-white/5 transition-all duration-500 flex flex-col overflow-hidden",
-          isSidebarOpen 
-            ? isSidebarCollapsed ? "w-20" : "w-80" 
-            : "w-0 md:w-20"
-        )}
-      >
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-white/5 flex items-center justify-between min-h-[80px]">
+      <div className={cn(
+        "fixed md:relative z-50 h-screen bg-[#111118]/90 backdrop-blur-3xl border-r border-white/5 transition-all duration-500 flex flex-col overflow-hidden",
+        isSidebarOpen ? isSidebarCollapsed ? "w-20" : "w-80" : "w-0 md:w-20"
+      )}>
+        <div className="p-4 border-b border-white/5 flex items-center justify-between min-h-[76px]">
           {(!isSidebarCollapsed && isSidebarOpen) ? (
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-[1rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
-                <img src="/favicon.png" alt="KTM" className="w-7 h-7" />
+              <div className="w-11 h-11 rounded-[0.875rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
+                <img src="/favicon.png" alt="KTM" className="w-6 h-6" />
               </div>
-              <span className="font-bold text-xl bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent whitespace-nowrap">
+              <span className="font-bold text-lg bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent whitespace-nowrap">
                 AI Trend
               </span>
             </div>
           ) : (
-            <div className="w-12 h-12 mx-auto rounded-[1rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
-              <img src="/favicon.png" alt="KTM" className="w-7 h-7" />
+            <div className="w-11 h-11 mx-auto rounded-[0.875rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+              <img src="/favicon.png" alt="KTM" className="w-6 h-6" />
             </div>
           )}
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              if (isSidebarOpen) {
-                setIsSidebarCollapsed(!isSidebarCollapsed);
-              } else {
-                setIsSidebarOpen(true);
-                setIsSidebarCollapsed(false);
-              }
-            }}
-            className="hover:bg-white/5 text-gray-400 hover:text-white rounded-[0.75rem] flex-shrink-0"
+            onClick={() => isSidebarOpen ? setIsSidebarCollapsed(!isSidebarCollapsed) : (setIsSidebarOpen(true), setIsSidebarCollapsed(false))}
+            className="hover:bg-white/5 text-gray-400 hover:text-white rounded-xl flex-shrink-0 h-9 w-9"
           >
-            {isSidebarCollapsed || !isSidebarOpen ? <Menu className="w-5 h-5" /> : <X className="w-5 h-5" />}
+            {isSidebarCollapsed || !isSidebarOpen ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
           </Button>
         </div>
 
-        {/* Navigation Tabs - only show when expanded */}
         {!isSidebarCollapsed && isSidebarOpen && (
-          <div className="p-4 border-b border-white/5">
-            <div className="flex gap-2 bg-white/5 p-1.5 rounded-[1rem]">
+          <div className="p-3 border-b border-white/5">
+            <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl">
               <button
                 onClick={() => setActiveTab("chat")}
                 className={cn(
-                  "flex-1 py-3 px-4 rounded-[0.75rem] text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
+                  "flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
                   activeTab === "chat"
-                    ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20"
+                    ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -937,9 +1294,9 @@ ${context}
               <button
                 onClick={() => setActiveTab("trends")}
                 className={cn(
-                  "flex-1 py-3 px-4 rounded-[0.75rem] text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
+                  "flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2",
                   activeTab === "trends"
-                    ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20"
+                    ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -950,87 +1307,45 @@ ${context}
           </div>
         )}
 
-        {/* Collapsed tabs */}
         {(isSidebarCollapsed || !isSidebarOpen) && (
-          <div className="p-2 border-b border-white/5 space-y-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setActiveTab("chat")}
-              className={cn(
-                "w-full h-12 rounded-[0.75rem]",
-                activeTab === "chat" 
-                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white" 
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <MessageSquare className="w-5 h-5" />
+          <div className="p-2 border-b border-white/5 space-y-1.5">
+            <Button variant="ghost" size="icon" onClick={() => setActiveTab("chat")}
+              className={cn("w-full h-10 rounded-lg", activeTab === "chat" ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white" : "text-gray-400 hover:text-white hover:bg-white/5")}>
+              <MessageSquare className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setActiveTab("trends")}
-              className={cn(
-                "w-full h-12 rounded-[0.75rem]",
-                activeTab === "trends" 
-                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white" 
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <TrendingUp className="w-5 h-5" />
+            <Button variant="ghost" size="icon" onClick={() => setActiveTab("trends")}
+              className={cn("w-full h-10 rounded-lg", activeTab === "trends" ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white" : "text-gray-400 hover:text-white hover:bg-white/5")}>
+              <TrendingUp className="w-4 h-4" />
             </Button>
           </div>
         )}
 
-        {/* New Conversation Button */}
-        <div className="p-4">
-          <Button
-            onClick={startNewConversation}
-            className={cn(
-              "w-full gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-[1rem] h-14 font-medium shadow-xl shadow-emerald-500/20 transition-all duration-300 hover:shadow-emerald-500/40",
-              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2"
-            )}
-          >
+        <div className="p-3">
+          <Button onClick={startNewConversation}
+            className={cn("w-full gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-xl h-12 font-medium shadow-xl shadow-emerald-500/20",
+              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2")}>
             <Plus className="w-5 h-5" />
             {!isSidebarCollapsed && isSidebarOpen && "محادثة جديدة"}
           </Button>
         </div>
 
-        {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
           {conversations.map((conv, index) => (
-            <div
-              key={conv.id}
-              className={cn(
-                "group flex items-center gap-3 p-3 rounded-[1rem] cursor-pointer transition-all duration-300",
-                currentConversation === conv.id
-                  ? "bg-gradient-to-r from-emerald-500/15 to-cyan-500/15 border border-emerald-500/30"
-                  : "hover:bg-white/5"
-              )}
-              onClick={() => navigate(`/ktm/ai/trend/${conv.id}`)}
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-[0.75rem] flex items-center justify-center flex-shrink-0 transition-all duration-300",
-                currentConversation === conv.id
-                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-lg shadow-emerald-500/20"
-                  : "bg-white/5"
-              )}>
-                <MessageSquare className="w-4 h-4" />
+            <div key={conv.id}
+              className={cn("group flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer transition-all duration-300",
+                currentConversation === conv.id ? "bg-gradient-to-r from-emerald-500/15 to-cyan-500/15 border border-emerald-500/30" : "hover:bg-white/5")}
+              onClick={() => navigate(`/ktm/ai/trend/${conv.id}`)}>
+              <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all",
+                currentConversation === conv.id ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-lg" : "bg-white/5")}>
+                <MessageSquare className="w-3.5 h-3.5" />
               </div>
               {!isSidebarCollapsed && isSidebarOpen && (
                 <>
                   <span className="flex-1 truncate text-sm text-gray-300">{conv.title}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="opacity-0 group-hover:opacity-100 h-9 w-9 hover:bg-red-500/10 hover:text-red-400 rounded-[0.75rem] transition-all duration-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteConversation(conv.id);
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
+                  <Button variant="ghost" size="icon"
+                    className="opacity-0 group-hover:opacity-100 h-8 w-8 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all"
+                    onClick={(e) => { e.stopPropagation(); openDeleteDialog(conv.id, conv.title); }}>
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </>
               )}
@@ -1038,94 +1353,65 @@ ${context}
           ))}
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-white/5 space-y-2">
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full gap-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-[1rem] h-12", 
-              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2"
-            )}
-            onClick={() => navigate("/ktm-admin-panel")}
-          >
+        <div className="p-3 border-t border-white/5 space-y-1.5">
+          <Button variant="ghost" onClick={() => navigate("/ktm-admin-panel")}
+            className={cn("w-full gap-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl h-10", (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2")}>
             <Home className="w-4 h-4" />
             {!isSidebarCollapsed && isSidebarOpen && "لوحة التحكم"}
           </Button>
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full gap-2 text-red-400 hover:bg-red-500/10 rounded-[1rem] h-12", 
-              (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2"
-            )}
-            onClick={handleLogout}
-          >
+          <Button variant="ghost" onClick={handleLogout}
+            className={cn("w-full gap-2 text-red-400 hover:bg-red-500/10 rounded-xl h-10", (isSidebarCollapsed || !isSidebarOpen) && "justify-center p-2")}>
             <LogOut className="w-4 h-4" />
             {!isSidebarCollapsed && isSidebarOpen && "خروج"}
           </Button>
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Trending Games Tab Content */}
         {activeTab === "trends" && (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-7xl mx-auto">
-              {/* Trends Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                 <div className="animate-fade-in">
-                  <h1 className="text-4xl font-bold text-white flex items-center gap-4 mb-2">
-                    <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
-                      <Flame className="w-7 h-7" />
+                  <h1 className="text-3xl font-bold text-white flex items-center gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
+                      <Flame className="w-6 h-6" />
                     </div>
                     ألعاب الترند 2025
                   </h1>
                   {lastTrendUpdate && (
-                    <p className="text-gray-400 mt-3 flex items-center gap-2 mr-[4.5rem]">
+                    <p className="text-gray-400 mt-2 flex items-center gap-2 mr-[3.75rem] text-sm">
                       <Clock className="w-4 h-4" />
                       آخر تحديث: {new Date(lastTrendUpdate).toLocaleString('ar-SA')}
-                      <span className="text-emerald-400 text-xs">(تحديث تلقائي كل 24 ساعة)</span>
+                      <span className="text-emerald-400 text-xs">(تلقائي كل 24 ساعة)</span>
                     </p>
                   )}
                 </div>
                 <div className="flex gap-3">
                   <div className="relative">
-                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                    <Input
-                      value={trendSearchQuery}
-                      onChange={(e) => setTrendSearchQuery(e.target.value)}
-                      placeholder="ابحث في الترند..."
-                      className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-14 pr-12 w-72 rounded-[1.25rem] text-lg"
-                    />
+                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Input value={trendSearchQuery} onChange={(e) => setTrendSearchQuery(e.target.value)}
+                      placeholder="ابحث..." className="bg-white/5 border-white/10 h-12 pr-10 w-60 rounded-xl" />
                   </div>
-                  <Button
-                    onClick={() => setShowHistory(!showHistory)}
-                    variant="outline"
-                    className={cn(
-                      "h-14 gap-2 rounded-[1.25rem] border-white/10 hover:bg-white/5",
-                      showHistory && "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                    )}
-                  >
-                    <History className="w-5 h-5" />
-                    {showHistory ? "إخفاء السجل" : "سجل الترند"}
+                  <Button onClick={() => setShowHistory(!showHistory)} variant="outline"
+                    className={cn("h-12 gap-2 rounded-xl border-white/10", showHistory && "bg-emerald-500/10 border-emerald-500/30 text-emerald-400")}>
+                    <History className="w-4 h-4" />
+                    {showHistory ? "إخفاء" : "السجل"}
                   </Button>
                 </div>
               </div>
 
-              {/* Trend History Section */}
               {showHistory && (
-                <div className="mb-10 animate-fade-in">
-                  <div className="bg-[#111118]/80 backdrop-blur-xl rounded-[1.5rem] border border-white/5 p-6">
-                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                      <History className="w-5 h-5 text-emerald-400" />
-                      سجل الألعاب ({uniqueHistoryGames.length} لعبة)
+                <div className="mb-8 animate-fade-in">
+                  <div className="bg-[#111118]/80 backdrop-blur-xl rounded-xl border border-white/5 p-5">
+                    <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                      <History className="w-4 h-4 text-emerald-400" />
+                      سجل الألعاب ({uniqueHistoryGames.length})
                     </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
                       {uniqueHistoryGames.slice(0, 20).map((game, i) => (
-                        <div 
-                          key={i} 
-                          className="bg-white/5 rounded-[1rem] p-3 text-sm text-gray-300 hover:bg-white/10 transition-all duration-300"
-                        >
+                        <div key={i} className="bg-white/5 rounded-lg p-2.5 text-sm text-gray-300 hover:bg-white/10 transition-all">
                           {game.name}
                         </div>
                       ))}
@@ -1134,60 +1420,48 @@ ${context}
                 </div>
               )}
 
-              {/* Games Grid */}
               {isLoadingTrends ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="w-20 h-20 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-6" />
-                  <p className="text-gray-400 text-lg">جاري جلب ألعاب الترند...</p>
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="w-16 h-16 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4" />
+                  <p className="text-gray-400">جاري جلب الألعاب...</p>
                 </div>
               ) : filteredTrendingGames.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {filteredTrendingGames.map((game, index) => (
-                    <div
-                      key={index}
-                      className="group bg-[#111118]/80 backdrop-blur-xl rounded-[1.5rem] border border-white/5 overflow-hidden hover:border-emerald-500/30 transition-all duration-500 hover:shadow-2xl hover:shadow-emerald-500/10 animate-fade-in"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
+                    <div key={index}
+                      className="group bg-[#111118]/80 backdrop-blur-xl rounded-xl border border-white/5 overflow-hidden hover:border-emerald-500/30 transition-all duration-500 hover:shadow-xl hover:shadow-emerald-500/10 animate-fade-in"
+                      style={{ animationDelay: `${index * 80}ms` }}>
                       <div className="aspect-video bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 relative overflow-hidden">
-                        {game.image ? (
-                          <img
-                            src={game.image}
-                            alt={game.name}
+                        {game.image && (
+                          <img src={game.image} alt={game.name}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                        ) : null}
-                        <div className={cn("absolute inset-0 flex items-center justify-center", game.image && "hidden")}>
-                          <Gamepad2 className="w-16 h-16 text-emerald-400/30" />
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Gamepad2 className="w-12 h-12 text-emerald-400/20" />
                         </div>
                         <div className="absolute inset-0 bg-gradient-to-t from-[#111118] to-transparent opacity-60" />
-                        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-emerald-500/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                          <Flame className="w-3.5 h-3.5" />
+                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-500/90 backdrop-blur-sm px-2.5 py-1 rounded-full">
+                          <Flame className="w-3 h-3" />
                           <span className="text-xs font-medium">Trending</span>
                         </div>
                       </div>
-                      <div className="p-5 space-y-3">
-                        <h3 className="font-bold text-white text-lg group-hover:text-emerald-400 transition-colors line-clamp-1">
+                      <div className="p-4 space-y-2">
+                        <h3 className="font-bold text-white text-base group-hover:text-emerald-400 transition-colors line-clamp-1">
                           {game.name}
                         </h3>
                         {game.genres && game.genres.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {game.genres.map((genre, i) => (
-                              <span
-                                key={i}
-                                className="bg-emerald-500/10 text-emerald-400 text-xs px-3 py-1.5 rounded-full border border-emerald-500/20"
-                              >
+                          <div className="flex flex-wrap gap-1">
+                            {game.genres.slice(0, 3).map((genre, i) => (
+                              <span key={i} className="bg-emerald-500/10 text-emerald-400 text-xs px-2 py-1 rounded-full border border-emerald-500/20">
                                 {genre}
                               </span>
                             ))}
                           </div>
                         )}
                         {game.platform && (
-                          <div className="flex items-center gap-2 text-gray-400 text-sm">
-                            <Gamepad2 className="w-4 h-4" />
+                          <div className="flex items-center gap-1.5 text-gray-400 text-xs">
+                            <Gamepad2 className="w-3.5 h-3.5" />
                             {game.platform}
                           </div>
                         )}
@@ -1196,142 +1470,110 @@ ${context}
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-20">
-                  <div className="w-24 h-24 rounded-[1.5rem] bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 mx-auto flex items-center justify-center mb-6">
-                    <TrendingUp className="w-12 h-12 text-emerald-400/50" />
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 mx-auto flex items-center justify-center mb-4">
+                    <TrendingUp className="w-10 h-10 text-emerald-400/50" />
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">لا توجد ألعاب ترند</h3>
-                  <p className="text-gray-400 mb-6">جاري جلب أحدث الألعاب تلقائياً...</p>
-                  <div className="w-16 h-16 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto" />
+                  <h3 className="text-xl font-bold text-white mb-2">لا توجد ألعاب</h3>
+                  <p className="text-gray-400 mb-4">جاري الجلب...</p>
+                  <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto" />
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Chat Tab Content */}
         {activeTab === "chat" && (
           <>
-            {/* Chat Header */}
-            <header className="px-6 py-5 border-b border-white/5 bg-[#111118]/50 backdrop-blur-xl flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="md:hidden hover:bg-white/5 rounded-[0.75rem]"
-              >
-                <Menu className="w-5 h-5" />
+            <header className="px-5 py-4 border-b border-white/5 bg-[#111118]/50 backdrop-blur-xl flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="md:hidden hover:bg-white/5 rounded-lg h-9 w-9">
+                <Menu className="w-4 h-4" />
               </Button>
               
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-r from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
-                  <img src="/favicon.png" alt="KTM AI" className="w-8 h-8" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/30">
+                  <img src="/favicon.png" alt="KTM AI" className="w-7 h-7" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-white">KTM AI Trend</h1>
-                  <p className="text-sm text-gray-400">مساعدك الذكي • يتحدث جميع اللغات</p>
+                  <h1 className="text-xl font-bold text-white">KTM AI Trend</h1>
+                  <p className="text-xs text-gray-400">مساعدك الذكي • جميع اللغات</p>
                 </div>
               </div>
 
-              <div className="mr-auto flex items-center gap-3">
-                <span className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20">
-                  <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+              <div className="mr-auto">
+                <span className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20">
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                   متصل
                 </span>
               </div>
             </header>
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-5">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center max-w-3xl mx-auto">
-                  <div className="w-36 h-36 rounded-[2.5rem] bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 flex items-center justify-center mb-10 shadow-2xl shadow-emerald-500/40 animate-float">
-                    <img src="/favicon.png" alt="KTM AI" className="w-24 h-24 drop-shadow-2xl" />
+                  <div className="w-32 h-32 rounded-[2rem] bg-gradient-to-r from-emerald-500 via-cyan-500 to-emerald-500 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/40 animate-float">
+                    <img src="/favicon.png" alt="KTM AI" className="w-20 h-20" />
                   </div>
-                  <h2 className="text-5xl font-bold text-white mb-5">
-                    مرحباً بك في <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">KTM AI</span>
+                  <h2 className="text-4xl font-bold text-white mb-4">
+                    مرحباً بك في <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">KTM AI</span>
                   </h2>
-                  <p className="text-gray-400 text-xl mb-12 leading-relaxed max-w-xl">
-                    أنا مساعدك الذكي. أستطيع مساعدتك في اكتشاف الألعاب، تحليل الموقع، وأكثر من ذلك.
-                    <br />أتحدث جميع اللغات وأرد بنفس لغة رسالتك!
+                  <p className="text-gray-400 text-lg mb-10 max-w-lg">
+                    أنا مساعدك الذكي. أتحدث جميع اللغات وأرد بلغتك!
                   </p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
                     {[
-                      { icon: TrendingUp, text: "ما هي أحدث الألعاب الترند؟", color: "emerald" },
-                      { icon: Search, text: "ابحث لي عن ألعاب مغامرات", color: "cyan" },
-                      { icon: Sparkles, text: "ما الجديد في الموقع؟", color: "purple" },
-                      { icon: Star, text: "أخبرني عن إحصائيات الموقع", color: "amber" },
+                      { icon: TrendingUp, text: "ابحث لي عن ألعاب الترند 2025", color: "emerald" },
+                      { icon: Search, text: "قارن بين Red Dead و GTA V", color: "cyan" },
+                      { icon: Sparkles, text: "أعطني إحصائيات الموقع", color: "purple" },
+                      { icon: Star, text: "اقترح لي ألعاب RPG جديدة", color: "amber" },
                     ].map((item, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setInput(item.text);
-                          inputRef.current?.focus();
-                        }}
-                        className="group p-6 rounded-[1.5rem] bg-white/5 border border-white/5 hover:border-emerald-500/30 transition-all duration-500 text-right hover:bg-white/10 hover:shadow-xl hover:shadow-emerald-500/5 animate-fade-in"
-                        style={{ animationDelay: `${i * 100}ms` }}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "w-14 h-14 rounded-[1rem] flex items-center justify-center transition-all duration-300",
-                            item.color === "emerald" && "bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:shadow-lg group-hover:shadow-emerald-500/20",
-                            item.color === "cyan" && "bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20 group-hover:shadow-lg group-hover:shadow-cyan-500/20",
-                            item.color === "purple" && "bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20 group-hover:shadow-lg group-hover:shadow-purple-500/20",
-                            item.color === "amber" && "bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20 group-hover:shadow-lg group-hover:shadow-amber-500/20",
-                          )}>
-                            <item.icon className="w-7 h-7" />
+                      <button key={i} onClick={() => handleSuggestionClick(item.text)}
+                        className="group p-5 rounded-xl bg-white/5 border border-white/5 hover:border-emerald-500/30 transition-all duration-300 text-right hover:bg-white/10 animate-fade-in"
+                        style={{ animationDelay: `${i * 80}ms` }}>
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all",
+                            item.color === "emerald" && "bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20",
+                            item.color === "cyan" && "bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20",
+                            item.color === "purple" && "bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20",
+                            item.color === "amber" && "bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20")}>
+                            <item.icon className="w-6 h-6" />
                           </div>
-                          <span className="text-gray-300 text-lg group-hover:text-white transition-colors">{item.text}</span>
+                          <span className="text-gray-300 text-base group-hover:text-white transition-colors">{item.text}</span>
                         </div>
                       </button>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="max-w-4xl mx-auto space-y-8">
+                <div className="max-w-4xl mx-auto space-y-6">
                   {messages.map((message, index) => (
-                    <div
-                      key={message.id}
-                      className={cn(
-                        "flex gap-5 animate-fade-in",
-                        message.role === "user" ? "flex-row-reverse" : ""
-                      )}
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <div className={cn(
-                        "w-12 h-12 rounded-[1rem] flex-shrink-0 flex items-center justify-center shadow-lg",
-                        message.role === "assistant"
-                          ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-emerald-500/20"
-                          : "bg-white/10"
-                      )}>
+                    <div key={message.id}
+                      className={cn("flex gap-4 animate-fade-in", message.role === "user" ? "flex-row-reverse" : "")}
+                      style={{ animationDelay: `${index * 30}ms` }}>
+                      <div className={cn("w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-lg",
+                        message.role === "assistant" ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-emerald-500/20" : "bg-white/10")}>
                         {message.role === "assistant" ? (
-                          <img src="/favicon.png" alt="AI" className="w-7 h-7" />
+                          <img src="/favicon.png" alt="AI" className="w-6 h-6" />
+                        ) : profile?.avatar_url ? (
+                          <img src={profile.avatar_url} alt="User" className="w-full h-full rounded-xl object-cover" />
                         ) : (
-                          profile?.avatar_url ? (
-                            <img src={profile.avatar_url} alt="User" className="w-full h-full rounded-[1rem] object-cover" />
-                          ) : (
-                            <span className="text-lg font-bold">{profile?.first_name?.[0] || "U"}</span>
-                          )
+                          <span className="text-sm font-bold">{profile?.first_name?.[0] || "U"}</span>
                         )}
                       </div>
                       
-                      <div className={cn(
-                        "flex-1",
-                        message.role === "user" ? "text-left" : ""
-                      )}>
-                        <div className={cn(
-                          "rounded-[1.5rem] p-6 inline-block max-w-full",
+                      <div className={cn("flex-1", message.role === "user" ? "text-left" : "")}>
+                        <div className={cn("rounded-2xl p-5",
                           message.role === "assistant"
                             ? "bg-[#111118]/80 border border-white/5 backdrop-blur-xl"
-                            : "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-xl shadow-emerald-500/20"
-                        )}>
+                            : "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-xl shadow-emerald-500/20 inline-block max-w-[85%]")}>
                           {message.role === "assistant" && message.isAnimating && !message.content ? (
                             <div className="flex items-center gap-3">
                               <div className="flex gap-1.5">
-                                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" />
+                                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                               </div>
                               <span className="text-gray-400 text-sm">جاري التفكير...</span>
                             </div>
@@ -1340,17 +1582,14 @@ ${context}
                               {message.isAnimating ? (
                                 <StreamingText content={message.content} />
                               ) : (
-                                <FormattedContent content={message.content} />
+                                <RichContent content={message.content} />
                               )}
                             </div>
                           ) : (
-                            <span className="whitespace-pre-wrap text-lg">{message.content}</span>
+                            <span className="whitespace-pre-wrap">{message.content}</span>
                           )}
                         </div>
-                        <div className={cn(
-                          "text-xs text-gray-500 mt-3",
-                          message.role === "user" ? "text-left" : "text-right"
-                        )}>
+                        <div className={cn("text-xs text-gray-500 mt-2", message.role === "user" ? "text-left" : "text-right")}>
                           {new Date(message.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
@@ -1361,19 +1600,15 @@ ${context}
               )}
             </div>
 
-            {/* Suggestions */}
             {suggestions.length > 0 && messages.length > 0 && (
-              <div className="px-6 pb-2">
+              <div className="px-5 pb-2">
                 <div className="max-w-4xl mx-auto">
                   <div className="flex flex-wrap gap-2 justify-center">
                     {suggestions.map((suggestion, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setInput(suggestion)}
-                        className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-gray-400 text-sm hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400 transition-all duration-300 animate-fade-in flex items-center gap-2"
-                        style={{ animationDelay: `${i * 50}ms` }}
-                      >
-                        <Zap className="w-3.5 h-3.5" />
+                      <button key={i} onClick={() => handleSuggestionClick(suggestion)}
+                        className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-gray-400 text-sm hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400 transition-all duration-300 animate-fade-in flex items-center gap-2"
+                        style={{ animationDelay: `${i * 40}ms` }}>
+                        <Zap className="w-3 h-3" />
                         {suggestion}
                       </button>
                     ))}
@@ -1382,34 +1617,19 @@ ${context}
               </div>
             )}
 
-            {/* Input Area */}
-            <div className="p-6 border-t border-white/5 bg-[#111118]/50 backdrop-blur-xl">
+            <div className="p-5 border-t border-white/5 bg-[#111118]/50 backdrop-blur-xl">
               <div className="max-w-4xl mx-auto">
                 <div className="relative">
-                  <Input
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="اكتب رسالتك هنا... (أتحدث جميع اللغات)"
-                    disabled={isLoading}
-                    className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-16 pr-6 pl-20 text-lg rounded-[1.5rem] placeholder:text-gray-500 transition-all duration-300 focus:shadow-xl focus:shadow-emerald-500/10"
-                    dir="auto"
-                  />
-                  <Button
-                    onClick={() => sendMessage()}
-                    disabled={isLoading || !input.trim()}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-[1rem] shadow-xl shadow-emerald-500/30 disabled:opacity-50 transition-all duration-300 hover:shadow-emerald-500/50"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    ) : (
-                      <Send className="w-6 h-6" />
-                    )}
+                  <Input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+                    placeholder="اكتب رسالتك هنا..." disabled={isLoading}
+                    className="bg-white/5 border-white/10 focus:border-emerald-500/50 h-14 pr-5 pl-16 text-base rounded-xl" dir="auto" />
+                  <Button onClick={() => sendMessage()} disabled={isLoading || !input.trim()}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-xl shadow-xl shadow-emerald-500/30 disabled:opacity-50">
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                   </Button>
                 </div>
-                <p className="text-center text-xs text-gray-500 mt-4">
-                  KTM AI يستخدم Gemini AI • خصوصيتك محفوظة
+                <p className="text-center text-xs text-gray-500 mt-3">
+                  KTM AI • Gemini AI • خصوصيتك محفوظة
                 </p>
               </div>
             </div>
