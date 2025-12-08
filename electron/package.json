@@ -20,6 +20,9 @@
   "build": {
     "appId": "com.ktm.launcher",
     "productName": "KTM Launcher",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "main.js",
       "preload.js",
