@@ -19,15 +19,6 @@ if (!fs.existsSync(downloadPath)) {
   fs.mkdirSync(downloadPath, { recursive: true });
 }
 
-function getDistPath() {
-  // In production, files are in resources/app/dist
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'app', 'dist');
-  }
-  // In development
-  return path.join(__dirname, '..', 'dist');
-}
-
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -45,37 +36,15 @@ function createWindow() {
     backgroundColor: '#0a0a0f'
   });
 
-  // Load the React app
+  // Load the React app - in production, dist is copied next to main.js
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:8080');
+  } else if (fs.existsSync(indexPath)) {
+    mainWindow.loadFile(indexPath);
   } else {
-    const distPath = getDistPath();
-    const indexPath = path.join(distPath, 'index.html');
-    
-    console.log('Loading from:', indexPath);
-    console.log('Exists:', fs.existsSync(indexPath));
-    
-    if (fs.existsSync(indexPath)) {
-      mainWindow.loadFile(indexPath);
-    } else {
-      // Fallback: try alternative paths
-      const altPaths = [
-        path.join(__dirname, '..', 'dist', 'index.html'),
-        path.join(app.getAppPath(), 'dist', 'index.html'),
-        path.join(process.resourcesPath, 'dist', 'index.html')
-      ];
-      
-      for (const altPath of altPaths) {
-        if (fs.existsSync(altPath)) {
-          console.log('Found at:', altPath);
-          mainWindow.loadFile(altPath);
-          return;
-        }
-      }
-      
-      // Show error if no path works
-      mainWindow.loadURL(`data:text/html,<h1 style="color:white;background:#0a0a0f;height:100vh;display:flex;align-items:center;justify-content:center;margin:0;">Error: Could not find app files</h1>`);
-    }
+    mainWindow.loadURL(`data:text/html,<h1 style="color:white;background:#0a0a0f;height:100vh;display:flex;align-items:center;justify-content:center;margin:0;font-family:Arial;">تأكد من تنفيذ npm run build أولاً</h1>`);
   }
 
   mainWindow.on('closed', () => {

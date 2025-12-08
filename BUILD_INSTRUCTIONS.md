@@ -5,170 +5,59 @@
 1. **Node.js** (الإصدار 18 أو أحدث)
    - تحميل من: https://nodejs.org/
 
-2. **Git** (اختياري لكن مُوصى به)
-   - تحميل من: https://git-scm.com/
-
 ---
 
-## خطوات البناء
+## خطوات البناء (مهمة جداً!)
 
-### 1. تحميل المشروع
-
-```bash
-# نسخ المشروع من Lovable
-# اذهب إلى Settings > Export > Download as ZIP
-# أو استخدم Git إذا كان متاحاً
-```
-
-### 2. تثبيت المتطلبات الرئيسية
-
-```bash
-# افتح Terminal/PowerShell في مجلد المشروع
-cd path/to/project
-
-# تثبيت متطلبات الواجهة
-npm install
-```
-
-### 3. بناء الواجهة للإنتاج
-
+### 1. بناء الواجهة
 ```bash
 npm run build
 ```
 
-### 4. إعداد Electron
-
+### 2. نسخ ملفات dist إلى مجلد electron ⚠️ خطوة إلزامية
 ```bash
-# انتقل لمجلد Electron
+# Windows (PowerShell)
+Copy-Item -Path "dist" -Destination "electron/dist" -Recurse -Force
+
+# Windows (CMD)
+xcopy dist electron\dist /E /I /Y
+
+# Mac/Linux
+cp -r dist electron/dist
+```
+
+### 3. تثبيت وبناء Electron
+```bash
 cd electron
-
-# تثبيت متطلبات Electron
 npm install
-```
-
-### 5. إنشاء أيقونة التطبيق (اختياري)
-
-قم بإنشاء مجلد `electron/assets` وضع الأيقونات التالية:
-- `icon.png` (256x256 بكسل للمعاينة)
-- `icon.ico` (للويندوز)
-- `icon.icns` (للماك)
-
-يمكنك تحويل الأيقونات من: https://convertio.co/
-
-### 6. بناء التطبيق
-
-**مهم جداً للويندوز:** شغّل PowerShell أو CMD كـ **Administrator** (انقر بزر الفأرة الأيمن > "تشغيل كمسؤول")
-
-```bash
-# للويندوز فقط
 npm run build:win
-
-# للماك فقط
-npm run build:mac
-
-# للينكس فقط
-npm run build:linux
-
-# لجميع المنصات
-npm run build
 ```
 
-### 7. موقع الملفات النهائية
-
-بعد البناء، ستجد الملفات في:
-```
-electron/release/
-├── KTM Launcher Setup 1.0.0.exe  (مُثبّت الويندوز)
-├── KTM Launcher-1.0.0.dmg        (مُثبّت الماك)
-└── KTM Launcher-1.0.0.AppImage   (لينكس)
-```
-
-**ملاحظة:** حتى لو ظهرت أخطاء، يمكنك تشغيل التطبيق مباشرة من:
+### 4. تشغيل البرنامج
 ```
 electron/release/win-unpacked/KTM Launcher.exe
 ```
 
 ---
 
-## التشغيل للتطوير
+## ⚠️ ملاحظات مهمة جداً
 
-```bash
-# من المجلد الرئيسي - تشغيل الواجهة
-npm run dev
-
-# من مجلد electron - في terminal آخر
-npm run dev
-```
+- **يجب** نسخ مجلد `dist` إلى `electron/dist` قبل البناء
+- إذا ظهرت **شاشة سوداء** = لم يتم نسخ ملفات dist بشكل صحيح
+- شغّل PowerShell/CMD كـ Administrator إذا ظهر خطأ symbolic link
 
 ---
 
-## ملاحظات مهمة
+## حل المشاكل
 
-### بخصوص التحميل المباشر
-- اللانشر يدعم تحميل ملفات ZIP مباشرة
-- روابط مثل Gofile, Mediafire ستفتح في المتصفح
-- للتحميل المباشر، استخدم روابط مباشرة لملفات ZIP
+### شاشة سوداء؟
+تأكد من تنفيذ الخطوة 2 (نسخ dist إلى electron/dist)
 
-### بخصوص الاستخراج
-- الملفات تُستخرج تلقائياً بعد التحميل
-- يتم البحث عن ملف EXE تلقائياً
-- الملفات التالية يتم تجاهلها: unins*, setup*, install*
+### خطأ symbolic link؟
+شغّل البرنامج مباشرة من: `electron/release/win-unpacked/KTM Launcher.exe`
 
-### بخصوص المكتبة
-- الألعاب المثبتة تظهر في تبويب "المكتبة"
-- يمكن تشغيل أو إلغاء تثبيت أي لعبة
-- يمكن فتح مجلد اللعبة مباشرة
-
----
-
-## حل المشاكل الشائعة
-
-### خطأ: "Cannot create symbolic link"
-**السبب:** صلاحيات Windows غير كافية
-**الحل:** 
-1. شغّل PowerShell/CMD كـ Administrator
-2. أو استخدم التطبيق من مجلد `win-unpacked` مباشرة
-
-### خطأ: "Cannot find module"
+### خطأ module not found؟
 ```bash
 npm install
 cd electron && npm install
 ```
-
-### خطأ: "electron-builder" not found
-```bash
-cd electron
-npm install electron-builder --save-dev
-```
-
-### خطأ أثناء البناء للويندوز على ماك/لينكس
-تحتاج Wine لبناء تطبيقات ويندوز:
-```bash
-# macOS
-brew install --cask wine-stable
-
-# Linux
-sudo apt install wine
-```
-
----
-
-## هيكل الملفات
-
-```
-project/
-├── src/                    # كود React
-├── dist/                   # الواجهة المبنية
-├── electron/
-│   ├── main.js            # العملية الرئيسية
-│   ├── preload.js         # جسر الاتصال
-│   ├── package.json       # إعدادات Electron
-│   └── assets/            # الأيقونات
-└── BUILD_INSTRUCTIONS.md  # هذا الملف
-```
-
----
-
-## الدعم
-
-إذا واجهت أي مشاكل، تواصل معنا عبر صفحة "اتصل بنا" في الموقع.
