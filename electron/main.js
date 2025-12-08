@@ -200,12 +200,14 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
 
   return new Promise((resolve, reject) => {
     const gameFolder = path.join(downloadPath, gameSlug);
-    const zipPath = path.join(downloadPath, `${gameSlug}.zip`);
     
-    // Create game folder
+    // Create game folder first
     if (!fs.existsSync(gameFolder)) {
       fs.mkdirSync(gameFolder, { recursive: true });
     }
+    
+    // ZIP file goes inside the game folder
+    const zipPath = path.join(gameFolder, `${gameSlug}.zip`);
 
     const downloadId = `${gameId}-${Date.now()}`;
     

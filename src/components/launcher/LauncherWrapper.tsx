@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, ReactNode } from 'react';
 import LauncherTitleBar from './LauncherTitleBar';
 import LauncherNav from './LauncherNav';
 import LauncherSettings from './LauncherSettings';
@@ -15,11 +15,7 @@ const LauncherWrapper = ({ children }: LauncherWrapperProps) => {
   const [activeTab, setActiveTab] = useState<'store' | 'downloads' | 'library'>('store');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Debug log
-  useEffect(() => {
-    console.log('LauncherWrapper - isElectron:', isElectron);
-  }, [isElectron]);
-
+  // Always render the same structure to avoid React hooks issues
   if (!isElectron) {
     return <>{children}</>;
   }
