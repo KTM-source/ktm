@@ -79,6 +79,7 @@ interface ElectronAPI {
   onDownloadComplete: (callback: (data: { downloadId: string; gameId: string; gameTitle: string; installPath: string; exePath: string | null }) => void) => void;
   onDownloadError: (callback: (data: { downloadId: string; gameId: string; error: string }) => void) => void;
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => void;
+  onThemeChanged: (callback: (theme: string) => void) => void;
   removeAllListeners: (channel: string) => void;
   isElectron: boolean;
 }

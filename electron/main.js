@@ -79,17 +79,62 @@ function createMainWindow() {
       webSecurity: true,
       backgroundThrottling: false,
       spellcheck: false,
-      v8CacheOptions: 'code'
+      v8CacheOptions: 'code',
+      devTools: false // Disable DevTools completely
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: '#0a0a0f'
+    backgroundColor: settings.theme === 'light' ? '#ffffff' : '#0a0a0f'
   });
 
   mainWindow.webContents.setBackgroundThrottling(false);
   
+  // Prevent DevTools from opening via keyboard shortcuts
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Block F12
+    if (input.key === 'F12') {
+      event.preventDefault();
+    }
+    // Block Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
+    if (input.control && input.shift && ['I', 'i', 'J', 'j', 'C', 'c'].includes(input.key)) {
+      event.preventDefault();
+    }
+    // Block Ctrl+U (view source)
+    if (input.control && ['U', 'u'].includes(input.key)) {
+      event.preventDefault();
+    }
+  });
+  
   mainWindow.webContents.on('did-finish-load', () => {
+    // Apply theme
+    applyTheme(settings.theme);
+    
     mainWindow.webContents.insertCSS(`
       * { scroll-behavior: auto !important; }
+    `);
+    
+    // Inject DevTools blocking script
+    mainWindow.webContents.executeJavaScript(`
+      // Block right-click context menu
+      document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+      }, true);
+      
+      // Block keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'F12') {
+          e.preventDefault();
+          return false;
+        }
+        if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+          e.preventDefault();
+          return false;
+        }
+        if (e.ctrlKey && ['U', 'u'].includes(e.key)) {
+          e.preventDefault();
+          return false;
+        }
+      }, true);
     `);
   });
 
@@ -117,6 +162,30 @@ function createMainWindow() {
   mainWindow.on('unmaximize', () => {
     mainWindow.webContents.send('window-maximized', false);
   });
+}
+
+// Apply theme to the window
+function applyTheme(theme) {
+  if (!mainWindow) return;
+  
+  const isDark = theme === 'dark';
+  mainWindow.setBackgroundColor(isDark ? '#0a0a0f' : '#ffffff');
+  
+  // Inject theme CSS
+  mainWindow.webContents.executeJavaScript(`
+    (function() {
+      const root = document.documentElement;
+      if ('${theme}' === 'light') {
+        root.classList.remove('dark');
+        root.classList.add('light');
+        localStorage.setItem('theme', 'light');
+      } else {
+        root.classList.remove('light');
+        root.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      }
+    })();
+  `);
 }
 
 // Performance optimizations
@@ -168,8 +237,15 @@ ipcMain.handle('get-settings', () => ({
 }));
 
 ipcMain.handle('save-settings', (event, newSettings) => {
+  const oldTheme = settings.theme;
   settings = { ...settings, ...newSettings };
   store.set('settings', settings);
+  
+  // Apply theme change immediately
+  if (newSettings.theme && newSettings.theme !== oldTheme) {
+    applyTheme(newSettings.theme);
+  }
+  
   return { success: true };
 });
 
@@ -250,69 +326,104 @@ ipcMain.handle('select-exe', async (event, gameId) => {
   return { success: false, error: 'لم يتم اختيار ملف' };
 });
 
-// Resolve Gofile direct download link
+// Resolve Gofile direct download link using their API
 async function resolveGofileLink(url) {
   return new Promise(async (resolve, reject) => {
     try {
       // Extract content ID from URL
       const match = url.match(/gofile\.io\/d\/([a-zA-Z0-9-]+)/);
       if (!match) {
-        resolve(url); // Not a gofile link, return as-is
+        resolve({ directLink: url, fileName: null, token: null });
         return;
       }
       
       const contentId = match[1];
+      console.log('Resolving Gofile content:', contentId);
       
       // Step 1: Create guest account to get token
       const tokenResponse = await fetchJson('https://api.gofile.io/accounts', 'POST');
+      console.log('Token response:', JSON.stringify(tokenResponse));
+      
       if (tokenResponse.status !== 'ok') {
-        reject(new Error('Failed to create Gofile guest account'));
+        reject(new Error('Failed to create Gofile guest account: ' + JSON.stringify(tokenResponse)));
         return;
       }
       
       const token = tokenResponse.data.token;
+      console.log('Got token:', token);
       
-      // Step 2: Get content info with token
-      const contentResponse = await fetchJson(`https://api.gofile.io/contents/${contentId}?wt=4fd6sg89d7s6&cache=true`, 'GET', {
-        'Authorization': `Bearer ${token}`
+      // Step 2: Get content info with token - use correct websiteToken
+      const websiteToken = '4fd6sg89d7s6';
+      const contentUrl = `https://api.gofile.io/contents/${contentId}?wt=${websiteToken}`;
+      console.log('Fetching content from:', contentUrl);
+      
+      const contentResponse = await fetchJson(contentUrl, 'GET', {
+        'Authorization': `Bearer ${token}`,
+        'Cookie': `accountToken=${token}`
       });
       
+      console.log('Content response status:', contentResponse.status);
+      
       if (contentResponse.status !== 'ok') {
-        reject(new Error('Failed to get Gofile content'));
-        return;
+        // Try alternative API endpoint
+        const altContentUrl = `https://api.gofile.io/getContent?contentId=${contentId}&token=${token}&wt=${websiteToken}`;
+        const altResponse = await fetchJson(altContentUrl, 'GET');
+        
+        if (altResponse.status !== 'ok') {
+          reject(new Error('Failed to get Gofile content: ' + (contentResponse.data?.message || altResponse.data?.message || 'Unknown error')));
+          return;
+        }
+        
+        return processGofileContent(altResponse.data, token, resolve, reject);
       }
       
-      // Step 3: Extract first file's direct link
-      const contents = contentResponse.data.children || contentResponse.data.contents;
-      if (!contents) {
-        reject(new Error('No files found in Gofile'));
-        return;
-      }
-      
-      // Get the first file
-      const files = Object.values(contents);
-      if (files.length === 0) {
-        reject(new Error('No files found'));
-        return;
-      }
-      
-      const file = files[0];
-      const directLink = file.link || file.directLink;
-      const fileName = file.name;
-      
-      if (!directLink) {
-        reject(new Error('No direct link found'));
-        return;
-      }
-      
-      resolve({ directLink, fileName, token });
+      return processGofileContent(contentResponse.data, token, resolve, reject);
     } catch (err) {
+      console.error('Gofile error:', err);
       reject(err);
     }
   });
 }
 
-// Helper function for JSON fetch
+function processGofileContent(data, token, resolve, reject) {
+  // Extract files from response
+  const contents = data.children || data.contents || data.childs;
+  
+  if (!contents || (typeof contents === 'object' && Object.keys(contents).length === 0)) {
+    reject(new Error('No files found in Gofile folder'));
+    return;
+  }
+  
+  // Get files array
+  const files = Array.isArray(contents) ? contents : Object.values(contents);
+  
+  if (files.length === 0) {
+    reject(new Error('Empty Gofile folder'));
+    return;
+  }
+  
+  // Find the main file (largest or first)
+  let mainFile = files[0];
+  for (const file of files) {
+    if (file.type === 'file' && (!mainFile || (file.size && file.size > (mainFile.size || 0)))) {
+      mainFile = file;
+    }
+  }
+  
+  const directLink = mainFile.link || mainFile.directLink || mainFile.downloadUrl;
+  const fileName = mainFile.name;
+  
+  console.log('Found file:', fileName, 'Link:', directLink ? 'yes' : 'no');
+  
+  if (!directLink) {
+    reject(new Error('No direct download link available. File might be password protected.'));
+    return;
+  }
+  
+  resolve({ directLink, fileName, token });
+}
+
+// Helper function for JSON fetch with better error handling
 function fetchJson(url, method = 'GET', headers = {}) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
@@ -323,6 +434,7 @@ function fetchJson(url, method = 'GET', headers = {}) {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...headers
       }
     };
@@ -332,14 +444,25 @@ function fetchJson(url, method = 'GET', headers = {}) {
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try {
-          resolve(JSON.parse(data));
+          const parsed = JSON.parse(data);
+          resolve(parsed);
         } catch (e) {
-          reject(e);
+          console.error('JSON parse error:', data.substring(0, 200));
+          reject(new Error('Invalid JSON response'));
         }
       });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      console.error('Request error:', err);
+      reject(err);
+    });
+    
+    req.setTimeout(30000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+    
     req.end();
   });
 }

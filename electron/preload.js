@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWindowMaximized: (callback) => {
     ipcRenderer.on('window-maximized', (event, isMaximized) => callback(isMaximized));
   },
+  onThemeChanged: (callback) => {
+    ipcRenderer.on('theme-changed', (event, theme) => callback(theme));
+  },
   
   // Remove listeners
   removeAllListeners: (channel) => {

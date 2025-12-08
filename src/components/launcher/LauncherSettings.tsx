@@ -250,7 +250,18 @@ const LauncherSettings = ({ open, onOpenChange }: LauncherSettingsProps) => {
                         onValueChange={(v) => {
                           setTheme(v);
                           handleSettingChange('theme', v);
-                          document.documentElement.classList.toggle('dark', v === 'dark');
+                          // Apply theme immediately
+                          const root = document.documentElement;
+                          if (v === 'light') {
+                            root.classList.remove('dark');
+                            root.classList.add('light');
+                            localStorage.setItem('theme', 'light');
+                          } else {
+                            root.classList.remove('light');
+                            root.classList.add('dark');
+                            localStorage.setItem('theme', 'dark');
+                          }
+                          toast.success(v === 'light' ? 'تم التغيير إلى الوضع الفاتح' : 'تم التغيير إلى الوضع الداكن');
                         }}
                       >
                         <SelectTrigger className="w-32">
@@ -259,7 +270,6 @@ const LauncherSettings = ({ open, onOpenChange }: LauncherSettingsProps) => {
                         <SelectContent>
                           <SelectItem value="dark">داكن</SelectItem>
                           <SelectItem value="light">فاتح</SelectItem>
-                          <SelectItem value="system">تلقائي</SelectItem>
                         </SelectContent>
                       </Select>
                     }
