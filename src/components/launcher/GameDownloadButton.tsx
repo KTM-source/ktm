@@ -20,7 +20,7 @@ const GameDownloadButton = ({
   downloadUrl,
   className
 }: GameDownloadButtonProps) => {
-  const { isElectron, isGameInstalled, launchGame, downloadGame, activeDownloads } = useElectron();
+  const { isElectron, isGameInstalled, launchGame, downloadGame, activeDownloads, selectExe } = useElectron();
   const [installed, setInstalled] = useState<{ installed: boolean; exePath?: string | null }>({ installed: false });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -68,11 +68,21 @@ const GameDownloadButton = ({
     const handleLaunch = async () => {
       setIsLoading(true);
       const result = await launchGame(gameId, installed.exePath || undefined);
-      setIsLoading(false);
       
-      if (!result?.success) {
+      // If needs exe selection, prompt user
+      if (result?.needsExeSelection) {
+        toast.info('يرجى اختيار ملف تشغيل اللعبة (.exe)');
+        const selectResult = await selectExe(gameId);
+        if (selectResult?.success && selectResult.exePath) {
+          // Update local state and try launching again
+          setInstalled({ installed: true, exePath: selectResult.exePath });
+          await launchGame(gameId, selectResult.exePath);
+        }
+      } else if (!result?.success) {
         toast.error(result?.error || 'فشل في تشغيل اللعبة');
       }
+      
+      setIsLoading(false);
     };
 
     return (
@@ -95,18 +105,6 @@ const GameDownloadButton = ({
   const handleDownload = async () => {
     if (!downloadUrl) {
       toast.error('رابط التحميل غير متوفر');
-      return;
-    }
-
-    // Check if it's a direct download link (ZIP file)
-    const isDirectLink = downloadUrl.toLowerCase().includes('.zip') || 
-                         downloadUrl.toLowerCase().includes('.rar') ||
-                         downloadUrl.includes('gofile.io/d/') ||
-                         downloadUrl.includes('mediafire.com');
-
-    if (!isDirectLink) {
-      toast.error('هذا الرابط لا يدعم التحميل المباشر، سيتم فتحه في المتصفح');
-      window.open(downloadUrl, '_blank');
       return;
     }
 
