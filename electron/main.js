@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -12,6 +12,7 @@ let mainWindow;
 let splashWindow;
 let downloadPath = store.get('downloadPath') || path.join(app.getPath('downloads'), 'KTM Games');
 let activeDownloads = new Map();
+let currentDownloadRequest = null; // For single download queue
 let installedGames = store.get('installedGames') || [];
 let downloadHistory = store.get('downloadHistory') || [];
 
@@ -48,16 +49,22 @@ function createMainWindow() {
     minHeight: 700,
     frame: false,
     titleBarStyle: 'hidden',
-    show: false, // Don't show until ready
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true
+      webSecurity: true,
+      // Performance optimizations
+      backgroundThrottling: false,
+      enableBlinkFeatures: 'CSSColorSchemeUARendering'
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#0a0a0f'
   });
+
+  // Disable hardware acceleration throttling
+  mainWindow.webContents.setBackgroundThrottling(false);
 
   // Load the official KTM website
   mainWindow.loadURL('https://ktm.lovable.app/');
@@ -71,14 +78,13 @@ function createMainWindow() {
       }
       mainWindow.show();
       mainWindow.focus();
-    }, 2500); // Show splash for at least 2.5 seconds
+    }, 2500);
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  // Handle maximize state for UI updates
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('window-maximized', true);
   });
@@ -87,6 +93,10 @@ function createMainWindow() {
     mainWindow.webContents.send('window-maximized', false);
   });
 }
+
+// Disable hardware acceleration for better performance in some cases
+app.commandLine.appendSwitch('disable-gpu-vsync');
+app.commandLine.appendSwitch('disable-frame-rate-limit');
 
 app.whenReady().then(() => {
   createSplashWindow();
@@ -142,8 +152,52 @@ ipcMain.handle('set-download-path', async () => {
   return null;
 });
 
-// Download game
+// Select exe file for game
+ipcMain.handle('select-exe', async (event, gameId) => {
+  const game = installedGames.find(g => g.gameId === gameId);
+  if (!game) return { success: false, error: 'اللعبة غير موجودة' };
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    title: 'اختر ملف تشغيل اللعبة (.exe)',
+    defaultPath: game.installPath,
+    filters: [
+      { name: 'Executable', extensions: ['exe'] }
+    ]
+  });
+
+  if (!result.canceled && result.filePaths[0]) {
+    // Update the game's exePath
+    const gameIndex = installedGames.findIndex(g => g.gameId === gameId);
+    if (gameIndex !== -1) {
+      installedGames[gameIndex].exePath = result.filePaths[0];
+      store.set('installedGames', installedGames);
+      return { success: true, exePath: result.filePaths[0] };
+    }
+  }
+  return { success: false, error: 'لم يتم اختيار ملف' };
+});
+
+// Download game - Single download at a time
 ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, gameSlug }) => {
+  // Cancel any existing download
+  if (currentDownloadRequest) {
+    try {
+      currentDownloadRequest.destroy();
+    } catch (e) {}
+    currentDownloadRequest = null;
+  }
+  
+  // Clear active downloads (only one allowed)
+  for (const [id, data] of activeDownloads) {
+    mainWindow?.webContents.send('download-status', {
+      downloadId: id,
+      gameId: data.gameId,
+      status: 'paused'
+    });
+  }
+  activeDownloads.clear();
+
   return new Promise((resolve, reject) => {
     const gameFolder = path.join(downloadPath, gameSlug);
     const zipPath = path.join(downloadPath, `${gameSlug}.zip`);
@@ -157,15 +211,21 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
     
     const protocol = downloadUrl.startsWith('https') ? https : http;
     
-    const request = protocol.get(downloadUrl, (response) => {
+    const request = protocol.get(downloadUrl, { timeout: 30000 }, (response) => {
       // Handle redirects
       if (response.statusCode === 301 || response.statusCode === 302) {
-        protocol.get(response.headers.location, handleResponse);
+        const redirectUrl = response.headers.location;
+        const redirectProtocol = redirectUrl.startsWith('https') ? https : http;
+        const redirectRequest = redirectProtocol.get(redirectUrl, { timeout: 30000 }, handleResponse);
+        redirectRequest.on('error', handleError);
+        currentDownloadRequest = redirectRequest;
         return;
       }
       
       handleResponse(response);
     });
+
+    currentDownloadRequest = request;
 
     function handleResponse(response) {
       const totalSize = parseInt(response.headers['content-length'], 10) || 0;
@@ -179,16 +239,31 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
         gameSlug,
         totalSize,
         downloadedSize: 0,
+        progress: 0,
         status: 'downloading',
         startTime: Date.now()
+      });
+
+      // Send initial progress
+      mainWindow?.webContents.send('download-progress', {
+        downloadId,
+        gameId,
+        gameTitle,
+        progress: 0,
+        downloadedSize: 0,
+        totalSize,
+        speed: 0
       });
 
       response.on('data', (chunk) => {
         downloadedSize += chunk.length;
         const progress = totalSize > 0 ? (downloadedSize / totalSize) * 100 : 0;
         
-        activeDownloads.get(downloadId).downloadedSize = downloadedSize;
-        activeDownloads.get(downloadId).progress = progress;
+        const downloadData = activeDownloads.get(downloadId);
+        if (downloadData) {
+          downloadData.downloadedSize = downloadedSize;
+          downloadData.progress = progress;
+        }
         
         mainWindow?.webContents.send('download-progress', {
           downloadId,
@@ -197,7 +272,7 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
           progress,
           downloadedSize,
           totalSize,
-          speed: calculateSpeed(downloadedSize, activeDownloads.get(downloadId).startTime)
+          speed: calculateSpeed(downloadedSize, activeDownloads.get(downloadId)?.startTime || Date.now())
         });
       });
 
@@ -205,8 +280,13 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
 
       fileStream.on('finish', async () => {
         fileStream.close();
+        currentDownloadRequest = null;
         
-        activeDownloads.get(downloadId).status = 'extracting';
+        const downloadData = activeDownloads.get(downloadId);
+        if (downloadData) {
+          downloadData.status = 'extracting';
+        }
+        
         mainWindow?.webContents.send('download-status', {
           downloadId,
           gameId,
@@ -221,7 +301,7 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
           // Delete ZIP after extraction
           fs.unlinkSync(zipPath);
           
-          // Find executable
+          // Find executable (but don't auto-set, let user choose on first launch)
           const exePath = findExecutable(gameFolder);
           
           // Save to installed games
@@ -230,7 +310,7 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
             gameTitle,
             gameSlug,
             installPath: gameFolder,
-            exePath,
+            exePath, // This might be null, user will select on first launch
             installedAt: new Date().toISOString(),
             size: getFolderSize(gameFolder)
           };
@@ -243,7 +323,6 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
             ...installedGame,
             downloadedAt: new Date().toISOString()
           });
-          // Keep only last 50 downloads
           downloadHistory = downloadHistory.slice(0, 50);
           store.set('downloadHistory', downloadHistory);
           
@@ -270,6 +349,7 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
       });
 
       fileStream.on('error', (err) => {
+        currentDownloadRequest = null;
         activeDownloads.delete(downloadId);
         mainWindow?.webContents.send('download-error', {
           downloadId,
@@ -280,7 +360,8 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
       });
     }
 
-    request.on('error', (err) => {
+    function handleError(err) {
+      currentDownloadRequest = null;
       activeDownloads.delete(downloadId);
       mainWindow?.webContents.send('download-error', {
         downloadId,
@@ -288,12 +369,25 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
         error: err.message
       });
       reject(err);
+    }
+
+    request.on('error', handleError);
+    request.on('timeout', () => {
+      request.destroy();
+      handleError(new Error('Connection timeout'));
     });
   });
 });
 
 // Cancel download
 ipcMain.handle('cancel-download', (event, downloadId) => {
+  if (currentDownloadRequest) {
+    try {
+      currentDownloadRequest.destroy();
+    } catch (e) {}
+    currentDownloadRequest = null;
+  }
+  
   if (activeDownloads.has(downloadId)) {
     activeDownloads.delete(downloadId);
     return true;
@@ -305,7 +399,12 @@ ipcMain.handle('cancel-download', (event, downloadId) => {
 ipcMain.handle('get-active-downloads', () => {
   return Array.from(activeDownloads.entries()).map(([id, data]) => ({
     downloadId: id,
-    ...data
+    gameId: data.gameId,
+    gameTitle: data.gameTitle,
+    progress: data.progress || 0,
+    downloadedSize: data.downloadedSize || 0,
+    totalSize: data.totalSize || 0,
+    speed: calculateSpeed(data.downloadedSize || 0, data.startTime || Date.now())
   }));
 });
 
@@ -317,19 +416,22 @@ ipcMain.handle('get-download-history', () => downloadHistory);
 
 // Launch game
 ipcMain.handle('launch-game', async (event, { gameId, exePath }) => {
+  const game = installedGames.find(g => g.gameId === gameId);
+  
+  // If exePath provided and exists, use it
   if (exePath && fs.existsSync(exePath)) {
     shell.openPath(exePath);
     return { success: true };
   }
   
-  // Try to find the game in installed games
-  const game = installedGames.find(g => g.gameId === gameId);
+  // If game has saved exePath
   if (game?.exePath && fs.existsSync(game.exePath)) {
     shell.openPath(game.exePath);
     return { success: true };
   }
   
-  return { success: false, error: 'لم يتم العثور على ملف اللعبة' };
+  // No exe found - need user to select
+  return { success: false, needsExeSelection: true, installPath: game?.installPath };
 });
 
 // Uninstall game
@@ -340,12 +442,10 @@ ipcMain.handle('uninstall-game', async (event, gameId) => {
   const game = installedGames[gameIndex];
   
   try {
-    // Delete game folder
     if (fs.existsSync(game.installPath)) {
       fs.rmSync(game.installPath, { recursive: true, force: true });
     }
     
-    // Remove from installed games
     installedGames.splice(gameIndex, 1);
     store.set('installedGames', installedGames);
     
@@ -375,43 +475,73 @@ ipcMain.handle('is-game-installed', (event, gameId) => {
 
 // Helper functions
 function findExecutable(folderPath) {
-  const files = fs.readdirSync(folderPath, { withFileTypes: true });
-  
-  // First, look for .exe files in the root
-  for (const file of files) {
-    if (file.isFile() && file.name.toLowerCase().endsWith('.exe')) {
-      // Skip common installers/updaters
-      const skipNames = ['unins', 'setup', 'install', 'update', 'redist', 'vcredist', 'dxsetup'];
-      const isSkipped = skipNames.some(skip => file.name.toLowerCase().includes(skip));
-      if (!isSkipped) {
-        return path.join(folderPath, file.name);
+  try {
+    const files = fs.readdirSync(folderPath, { withFileTypes: true });
+    
+    // First, look for .exe files in the root
+    for (const file of files) {
+      if (file.isFile() && file.name.toLowerCase().endsWith('.exe')) {
+        const skipNames = ['unins', 'setup', 'install', 'update', 'redist', 'vcredist', 'dxsetup', 'directx', 'dotnet'];
+        const isSkipped = skipNames.some(skip => file.name.toLowerCase().includes(skip));
+        if (!isSkipped) {
+          return path.join(folderPath, file.name);
+        }
       }
     }
-  }
-  
-  // Then search in subdirectories
-  for (const file of files) {
-    if (file.isDirectory()) {
-      const subExe = findExecutable(path.join(folderPath, file.name));
-      if (subExe) return subExe;
+    
+    // Then search in subdirectories (max 2 levels deep)
+    for (const file of files) {
+      if (file.isDirectory()) {
+        const subExe = findExecutableShallow(path.join(folderPath, file.name), 1);
+        if (subExe) return subExe;
+      }
     }
-  }
+  } catch (e) {}
+  
+  return null;
+}
+
+function findExecutableShallow(folderPath, depth) {
+  if (depth > 2) return null;
+  
+  try {
+    const files = fs.readdirSync(folderPath, { withFileTypes: true });
+    
+    for (const file of files) {
+      if (file.isFile() && file.name.toLowerCase().endsWith('.exe')) {
+        const skipNames = ['unins', 'setup', 'install', 'update', 'redist', 'vcredist', 'dxsetup', 'directx', 'dotnet'];
+        const isSkipped = skipNames.some(skip => file.name.toLowerCase().includes(skip));
+        if (!isSkipped) {
+          return path.join(folderPath, file.name);
+        }
+      }
+    }
+    
+    for (const file of files) {
+      if (file.isDirectory()) {
+        const subExe = findExecutableShallow(path.join(folderPath, file.name), depth + 1);
+        if (subExe) return subExe;
+      }
+    }
+  } catch (e) {}
   
   return null;
 }
 
 function getFolderSize(folderPath) {
   let size = 0;
-  const files = fs.readdirSync(folderPath, { withFileTypes: true });
-  
-  for (const file of files) {
-    const filePath = path.join(folderPath, file.name);
-    if (file.isDirectory()) {
-      size += getFolderSize(filePath);
-    } else {
-      size += fs.statSync(filePath).size;
+  try {
+    const files = fs.readdirSync(folderPath, { withFileTypes: true });
+    
+    for (const file of files) {
+      const filePath = path.join(folderPath, file.name);
+      if (file.isDirectory()) {
+        size += getFolderSize(filePath);
+      } else {
+        size += fs.statSync(filePath).size;
+      }
     }
-  }
+  } catch (e) {}
   
   return size;
 }

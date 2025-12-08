@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   launchGame: (data) => ipcRenderer.invoke('launch-game', data),
   uninstallGame: (gameId) => ipcRenderer.invoke('uninstall-game', gameId),
   openFolder: (path) => ipcRenderer.invoke('open-folder', path),
+  selectExe: (gameId) => ipcRenderer.invoke('select-exe', gameId),
   
   // Event listeners
   onDownloadProgress: (callback) => {
