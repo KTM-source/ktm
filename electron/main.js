@@ -23,8 +23,8 @@ if (!fs.existsSync(downloadPath)) {
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 500,
-    height: 400,
+    width: 650,
+    height: 420,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -57,19 +57,31 @@ function createMainWindow() {
       webSecurity: true,
       // Performance optimizations
       backgroundThrottling: false,
-      enableBlinkFeatures: 'CSSColorSchemeUARendering'
+      enableBlinkFeatures: 'CSSColorSchemeUARendering',
+      // Additional performance settings
+      spellcheck: false,
+      enableWebSQL: false,
+      v8CacheOptions: 'code'
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#0a0a0f'
   });
 
-  // Disable hardware acceleration throttling
+  // Performance optimizations
   mainWindow.webContents.setBackgroundThrottling(false);
+  
+  // Optimize rendering
+  mainWindow.webContents.on('did-finish-load', () => {
+    // Inject performance CSS to reduce animations if needed
+    mainWindow.webContents.insertCSS(`
+      * { scroll-behavior: auto !important; }
+    `);
+  });
 
   // Load the official KTM website
   mainWindow.loadURL('https://ktm.lovable.app/');
 
-  // Show main window when ready and close splash
+  // Show main window when ready and close splash (5 seconds)
   mainWindow.once('ready-to-show', () => {
     setTimeout(() => {
       if (splashWindow && !splashWindow.isDestroyed()) {
@@ -78,7 +90,7 @@ function createMainWindow() {
       }
       mainWindow.show();
       mainWindow.focus();
-    }, 2500);
+    }, 5000);
   });
 
   mainWindow.on('closed', () => {
@@ -94,9 +106,13 @@ function createMainWindow() {
   });
 }
 
-// Disable hardware acceleration for better performance in some cases
+// Performance optimizations
 app.commandLine.appendSwitch('disable-gpu-vsync');
 app.commandLine.appendSwitch('disable-frame-rate-limit');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
 
 app.whenReady().then(() => {
   createSplashWindow();
