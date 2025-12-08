@@ -302,6 +302,7 @@ export type Database = {
           system_requirements_minimum: Json | null
           system_requirements_recommended: Json | null
           title: string
+          trailer_url: string | null
           updated_at: string
           version: string
           views: number
@@ -327,6 +328,7 @@ export type Database = {
           system_requirements_minimum?: Json | null
           system_requirements_recommended?: Json | null
           title: string
+          trailer_url?: string | null
           updated_at?: string
           version?: string
           views?: number
@@ -352,6 +354,7 @@ export type Database = {
           system_requirements_minimum?: Json | null
           system_requirements_recommended?: Json | null
           title?: string
+          trailer_url?: string | null
           updated_at?: string
           version?: string
           views?: number

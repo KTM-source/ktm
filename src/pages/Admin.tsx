@@ -32,6 +32,7 @@ interface GameForm {
   genre: string;
   rating: string;
   download_link: string;
+  trailer_url: string;
   screenshots: string[];
   additional_files: AdditionalFile[];
   system_requirements_minimum: {
@@ -63,6 +64,7 @@ const initialForm: GameForm = {
   genre: "",
   rating: "4.5",
   download_link: "",
+  trailer_url: "",
   screenshots: [],
   additional_files: [],
   system_requirements_minimum: {
@@ -261,6 +263,7 @@ export default function Admin() {
         genre: form.genre || null,
         rating: parseFloat(form.rating) || 4.5,
         download_link: form.download_link || null,
+        trailer_url: form.trailer_url || null,
         screenshots: form.screenshots.length > 0 ? form.screenshots : null,
         additional_files: form.additional_files.length > 0 ? form.additional_files : null,
         system_requirements_minimum: form.system_requirements_minimum,
@@ -308,6 +311,7 @@ export default function Admin() {
       genre: game.genre || game.category || "",
       rating: String(game.rating || 4.5),
       download_link: game.download_link || "",
+      trailer_url: game.trailer_url || "",
       screenshots: game.screenshots || [],
       additional_files: game.additional_files || [],
       system_requirements_minimum: game.system_requirements_minimum || initialForm.system_requirements_minimum,
@@ -806,7 +810,7 @@ export default function Admin() {
                       <div className="space-y-4">
                         <h3 className="font-semibold text-lg border-b border-border/50 pb-2 flex items-center gap-2">
                           <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                          رابط التحميل
+                          رابط التحميل والتريلر
                         </h3>
                         <div>
                           <Label htmlFor="download_link">رابط التحميل</Label>
@@ -818,6 +822,20 @@ export default function Admin() {
                             placeholder="https://gofile.io/..."
                             className="glass-card border-border/50"
                           />
+                        </div>
+                        <div>
+                          <Label htmlFor="trailer_url">رابط التريلر (MP4 أو YouTube)</Label>
+                          <Input
+                            id="trailer_url"
+                            value={form.trailer_url}
+                            onChange={(e) => setForm({ ...form, trailer_url: e.target.value })}
+                            dir="ltr"
+                            placeholder="https://youtube.com/watch?v=... أو رابط MP4 مباشر"
+                            className="glass-card border-border/50"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            يُعرض في الصفحة الرئيسية والتفاصيل
+                          </p>
                         </div>
                       </div>
 

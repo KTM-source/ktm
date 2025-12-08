@@ -6,13 +6,13 @@
 
 @layer base {
   :root {
-    --background: 0 0% 10%;
+    --background: 222 47% 6%;
     --foreground: 210 40% 98%;
 
-    --card: 0 0% 12%;
+    --card: 222 47% 8%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 12%;
+    --popover: 222 47% 8%;
     --popover-foreground: 210 40% 98%;
 
     --primary: 187 100% 50%;
@@ -21,17 +21,17 @@
     --secondary: 260 100% 65%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 217 33% 12%;
+    --muted-foreground: 215 20% 55%;
 
     --accent: 187 100% 50%;
-    --accent-foreground: 0 0% 10%;
+    --accent-foreground: 222 47% 6%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
+    --border: 217 33% 15%;
+    --input: 217 33% 12%;
     --ring: 187 100% 50%;
 
     --radius: 0.75rem;
@@ -41,30 +41,30 @@
     --neon-purple: 260 100% 65%;
     --neon-pink: 330 100% 65%;
     --neon-green: 150 100% 50%;
-    --dark-surface: 0 0% 14%;
-    --glass: 0 0% 16%;
+    --dark-surface: 222 47% 10%;
+    --glass: 222 47% 12%;
 
     /* iOS 26 Glass Variables */
-    --glass-bg: 0 0% 18%;
-    --glass-border: 0 0% 25%;
+    --glass-bg: 222 47% 10%;
+    --glass-border: 217 33% 20%;
     --glass-highlight: 187 100% 50%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(187 100% 50%) 0%, hsl(260 100% 65%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 16%) 0%, hsl(0 0% 12%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(0 0% 10%) 0%, hsl(0 0% 14%) 50%, hsl(0 0% 10%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(222 47% 10%) 0%, hsl(222 47% 8%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(222 47% 6%) 0%, hsl(222 47% 10%) 50%, hsl(222 47% 6%) 100%);
     --gradient-glow: radial-gradient(ellipse at center, hsl(187 100% 50% / 0.15) 0%, transparent 70%);
-    --gradient-glass: linear-gradient(135deg, hsl(0 0% 22% / 0.6) 0%, hsl(0 0% 14% / 0.4) 100%);
+    --gradient-glass: linear-gradient(135deg, hsl(222 47% 14% / 0.6) 0%, hsl(222 47% 8% / 0.4) 100%);
 
     /* Shadows */
     --shadow-neon: 0 0 20px hsl(187 100% 50% / 0.3), 0 0 40px hsl(187 100% 50% / 0.1);
-    --shadow-card: 0 8px 32px hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 8px 32px hsl(222 47% 3% / 0.4);
     --shadow-glow: 0 0 60px hsl(187 100% 50% / 0.2);
-    --shadow-glass: 0 8px 32px hsl(0 0% 0% / 0.3), inset 0 1px 0 hsl(0 0% 30% / 0.5);
+    --shadow-glass: 0 8px 32px hsl(222 47% 3% / 0.3), inset 0 1px 0 hsl(217 33% 20% / 0.5);
   }
 
   .dark {
-    --background: 0 0% 10%;
+    --background: 222 47% 6%;
     --foreground: 210 40% 98%;
   }
 }

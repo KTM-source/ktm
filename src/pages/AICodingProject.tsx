@@ -224,7 +224,7 @@ const AICodingProject = () => {
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const codeEditorRef = useRef<HTMLPreElement>(null);
+  const codeEditorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1005,35 +1005,56 @@ const AICodingProject = () => {
                     )}
                   </div>
                   
-                  <div className="relative min-h-[calc(100vh-180px)]">
-                    {/* Syntax Highlighted Display */}
-                    <pre 
+                  <div className="relative min-h-[calc(100vh-180px)] bg-[#1e1e1e]">
+                    {/* Syntax Highlighted Display Layer */}
+                    <div 
                       ref={codeEditorRef}
-                      className="code-editor absolute inset-0 p-4 m-0 overflow-auto text-gray-300 pointer-events-none whitespace-pre-wrap break-words"
-                      style={{ background: 'transparent' }}
+                      className="code-editor absolute inset-0 p-4 overflow-auto pointer-events-none whitespace-pre-wrap break-words"
+                      style={{ 
+                        background: '#1e1e1e',
+                        color: '#abb2bf',
+                        fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
+                        fontSize: '14px',
+                        lineHeight: '1.6'
+                      }}
                       dangerouslySetInnerHTML={{ 
                         __html: highlightCode(activeFile?.content || "", activeFile?.language || "html") 
                       }}
                     />
                     
-                    {/* Editable Textarea */}
+                    {/* Invisible Editable Textarea (for input only) */}
                     <textarea
                       ref={textareaRef}
                       value={activeFile?.content || ""}
                       onChange={(e) => handleCodeChange(e.target.value)}
                       disabled={isAIEditing}
                       className={cn(
-                        "code-editor absolute inset-0 w-full h-full p-4 bg-transparent text-transparent caret-emerald-400 resize-none focus:outline-none",
+                        "code-editor absolute inset-0 w-full h-full p-4 resize-none focus:outline-none",
                         isAIEditing && "cursor-not-allowed"
                       )}
                       spellCheck={false}
-                      style={{ caretColor: '#10b981' }}
+                      style={{ 
+                        background: 'transparent',
+                        color: 'transparent',
+                        caretColor: '#10b981',
+                        fontFamily: "'Fira Code', 'Monaco', 'Consolas', monospace",
+                        fontSize: '14px',
+                        lineHeight: '1.6'
+                      }}
                     />
                     
+                    {/* AI Editing Line Indicator */}
                     {isAIEditing && editingFile === activeFile?.name && (
-                      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                        <div className="animate-pulse bg-emerald-500/10 h-6 w-full absolute" style={{ top: `${((editingLine || 1) * 24) + 48}px` }}>
-                          <div className="h-full w-1 bg-emerald-400 animate-pulse absolute left-0" />
+                      <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10">
+                        <div 
+                          className="line-editing absolute w-full transition-all duration-150"
+                          style={{ 
+                            top: `${((editingLine || 1) - 1) * 22.4 + 16}px`,
+                            height: '22.4px',
+                            background: 'rgba(16, 185, 129, 0.15)'
+                          }}
+                        >
+                          <div className="h-full w-1 bg-emerald-400 absolute left-0" />
                         </div>
                       </div>
                     )}
