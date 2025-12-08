@@ -22,15 +22,16 @@
     "files": [
       "main.js",
       "preload.js",
-      "assets/**/*",
-      "../dist/**/*"
+      "assets/**/*"
     ],
     "extraResources": [
       {
         "from": "../dist",
-        "to": "app/dist"
+        "to": "app/dist",
+        "filter": ["**/*"]
       }
     ],
+    "asar": false,
     "win": {
       "target": [
         {
