@@ -57,6 +57,8 @@ npm install
 
 ### 6. بناء التطبيق
 
+**مهم جداً للويندوز:** شغّل PowerShell أو CMD كـ **Administrator** (انقر بزر الفأرة الأيمن > "تشغيل كمسؤول")
+
 ```bash
 # للويندوز فقط
 npm run build:win
@@ -79,6 +81,11 @@ electron/release/
 ├── KTM Launcher Setup 1.0.0.exe  (مُثبّت الويندوز)
 ├── KTM Launcher-1.0.0.dmg        (مُثبّت الماك)
 └── KTM Launcher-1.0.0.AppImage   (لينكس)
+```
+
+**ملاحظة:** حتى لو ظهرت أخطاء، يمكنك تشغيل التطبيق مباشرة من:
+```
+electron/release/win-unpacked/KTM Launcher.exe
 ```
 
 ---
@@ -115,6 +122,12 @@ npm run dev
 ---
 
 ## حل المشاكل الشائعة
+
+### خطأ: "Cannot create symbolic link"
+**السبب:** صلاحيات Windows غير كافية
+**الحل:** 
+1. شغّل PowerShell/CMD كـ Administrator
+2. أو استخدم التطبيق من مجلد `win-unpacked` مباشرة
 
 ### خطأ: "Cannot find module"
 ```bash
