@@ -17,11 +17,24 @@ export const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showCategories, setShowCategories] = useState(false);
   const [showMobileCategories, setShowMobileCategories] = useState(false);
+  const [isElectron, setIsElectron] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { categories } = useGames();
   const { user, profile, loading } = useAuth();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Check if running in Electron
+  useEffect(() => {
+    const checkElectron = () => {
+      const electron = !!(window as any).electronAPI?.isElectron;
+      setIsElectron(electron);
+    };
+    checkElectron();
+    // Re-check after a short delay in case API is injected later
+    const timer = setTimeout(checkElectron, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -44,7 +57,10 @@ export const Navbar = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-[9999] bg-background/90 backdrop-blur-xl border-b border-border/30">
+    <nav className={cn(
+      "fixed left-0 right-0 z-[50] bg-background/90 backdrop-blur-xl border-b border-border/30",
+      isElectron ? "top-20" : "top-0"
+    )}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}

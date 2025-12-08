@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import LauncherTitleBar from './LauncherTitleBar';
 import LauncherNav from './LauncherNav';
 import LauncherSettings from './LauncherSettings';
@@ -15,6 +15,11 @@ const LauncherWrapper = ({ children }: LauncherWrapperProps) => {
   const [activeTab, setActiveTab] = useState<'store' | 'downloads' | 'library'>('store');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Debug log
+  useEffect(() => {
+    console.log('LauncherWrapper - isElectron:', isElectron);
+  }, [isElectron]);
+
   if (!isElectron) {
     return <>{children}</>;
   }
@@ -28,10 +33,10 @@ const LauncherWrapper = ({ children }: LauncherWrapperProps) => {
         onSettingsClick={() => setSettingsOpen(true)}
       />
       
-      <div className="pt-20">
+      <div>
         {activeTab === 'store' && children}
-        {activeTab === 'downloads' && <DownloadsTab />}
-        {activeTab === 'library' && <LibraryTab />}
+        {activeTab === 'downloads' && <div className="pt-20"><DownloadsTab /></div>}
+        {activeTab === 'library' && <div className="pt-20"><LibraryTab /></div>}
       </div>
 
       <LauncherSettings open={settingsOpen} onOpenChange={setSettingsOpen} />

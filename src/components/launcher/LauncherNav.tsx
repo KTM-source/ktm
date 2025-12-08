@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Store, Download, Library, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useElectron } from '@/hooks/useElectron';
@@ -20,7 +21,7 @@ const LauncherNav = ({ activeTab, onTabChange, onSettingsClick }: LauncherNavPro
   ];
 
   return (
-    <div className="fixed top-8 left-0 right-0 h-12 bg-background/80 backdrop-blur-xl border-b border-border/50 flex items-center justify-between px-4 z-[99]">
+    <div className="fixed top-8 left-0 right-0 h-12 bg-background border-b border-border/50 flex items-center justify-between px-4 z-[9998]">
       <div className="flex items-center gap-1">
         {tabs.map((tab) => (
           <button

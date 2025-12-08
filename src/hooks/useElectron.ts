@@ -57,47 +57,57 @@ export const useElectron = () => {
   const [downloadHistory, setDownloadHistory] = useState<InstalledGame[]>([]);
 
   useEffect(() => {
-    const electron = window.electronAPI?.isElectron;
-    setIsElectron(!!electron);
+    const initElectron = () => {
+      const electron = window.electronAPI?.isElectron;
+      console.log('Checking Electron API:', !!electron, window.electronAPI);
+      setIsElectron(!!electron);
 
-    if (electron) {
-      // Load initial settings
-      window.electronAPI?.getSettings().then((settings) => {
-        setDownloadPath(settings.downloadPath);
-        setInstalledGames(settings.installedGames);
-        setDownloadHistory(settings.downloadHistory);
-      });
+      if (electron) {
+        // Load initial settings
+        window.electronAPI?.getSettings().then((settings) => {
+          setDownloadPath(settings.downloadPath);
+          setInstalledGames(settings.installedGames);
+          setDownloadHistory(settings.downloadHistory);
+        }).catch(console.error);
 
-      // Load active downloads
-      window.electronAPI?.getActiveDownloads().then(setActiveDownloads);
+        // Load active downloads
+        window.electronAPI?.getActiveDownloads().then(setActiveDownloads).catch(console.error);
 
-      // Set up event listeners
-      window.electronAPI?.onDownloadProgress((data) => {
-        setActiveDownloads((prev) => {
-          const index = prev.findIndex((d) => d.downloadId === data.downloadId);
-          if (index >= 0) {
-            const updated = [...prev];
-            updated[index] = data;
-            return updated;
-          }
-          return [...prev, data];
+        // Set up event listeners
+        window.electronAPI?.onDownloadProgress((data) => {
+          setActiveDownloads((prev) => {
+            const index = prev.findIndex((d) => d.downloadId === data.downloadId);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = data;
+              return updated;
+            }
+            return [...prev, data];
+          });
         });
-      });
 
-      window.electronAPI?.onDownloadComplete((data) => {
-        setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== data.downloadId));
-        // Refresh installed games
-        window.electronAPI?.getInstalledGames().then(setInstalledGames);
-        window.electronAPI?.getDownloadHistory().then(setDownloadHistory);
-      });
+        window.electronAPI?.onDownloadComplete((data) => {
+          setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== data.downloadId));
+          // Refresh installed games
+          window.electronAPI?.getInstalledGames().then(setInstalledGames).catch(console.error);
+          window.electronAPI?.getDownloadHistory().then(setDownloadHistory).catch(console.error);
+        });
 
-      window.electronAPI?.onDownloadError((data) => {
-        setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== data.downloadId));
-      });
-    }
+        window.electronAPI?.onDownloadError((data) => {
+          setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== data.downloadId));
+        });
+      }
+    };
+
+    // Check immediately
+    initElectron();
+    
+    // Also check after a delay (in case API is injected after initial load)
+    const timer = setTimeout(initElectron, 500);
 
     return () => {
-      if (electron) {
+      clearTimeout(timer);
+      if (window.electronAPI?.isElectron) {
         window.electronAPI?.removeAllListeners('download-progress');
         window.electronAPI?.removeAllListeners('download-status');
         window.electronAPI?.removeAllListeners('download-complete');
