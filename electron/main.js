@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const AdmZip = require('adm-zip');
 const Store = require('electron-store');
+const { exec, spawn } = require('child_process');
 
 const store = new Store();
 
@@ -12,9 +13,25 @@ let mainWindow;
 let splashWindow;
 let downloadPath = store.get('downloadPath') || path.join(app.getPath('downloads'), 'KTM Games');
 let activeDownloads = new Map();
-let currentDownloadRequest = null; // For single download queue
+let currentDownloadRequest = null;
 let installedGames = store.get('installedGames') || [];
 let downloadHistory = store.get('downloadHistory') || [];
+
+// Settings with defaults
+let settings = store.get('settings') || {
+  autoUpdate: true,
+  notifications: true,
+  autoLaunch: false,
+  minimizeToTray: true,
+  hardwareAcceleration: true,
+  theme: 'dark',
+  language: 'ar',
+  downloadSpeed: 0,
+  autoExtract: true,
+  deleteArchiveAfterExtract: true,
+  verifyIntegrity: true,
+  soundEffects: true
+};
 
 // Ensure download directory exists
 if (!fs.existsSync(downloadPath)) {
@@ -23,8 +40,8 @@ if (!fs.existsSync(downloadPath)) {
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 650,
-    height: 420,
+    width: 700,
+    height: 450,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -42,6 +59,11 @@ function createSplashWindow() {
 }
 
 function createMainWindow() {
+  // Apply hardware acceleration setting
+  if (!settings.hardwareAcceleration) {
+    app.disableHardwareAcceleration();
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -55,33 +77,24 @@ function createMainWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: true,
-      // Performance optimizations
       backgroundThrottling: false,
-      enableBlinkFeatures: 'CSSColorSchemeUARendering',
-      // Additional performance settings
       spellcheck: false,
-      enableWebSQL: false,
       v8CacheOptions: 'code'
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#0a0a0f'
   });
 
-  // Performance optimizations
   mainWindow.webContents.setBackgroundThrottling(false);
   
-  // Optimize rendering
   mainWindow.webContents.on('did-finish-load', () => {
-    // Inject performance CSS to reduce animations if needed
     mainWindow.webContents.insertCSS(`
       * { scroll-behavior: auto !important; }
     `);
   });
 
-  // Load the official KTM website
   mainWindow.loadURL('https://ktm.lovable.app/');
 
-  // Show main window when ready and close splash (5 seconds)
   mainWindow.once('ready-to-show', () => {
     setTimeout(() => {
       if (splashWindow && !splashWindow.isDestroyed()) {
@@ -112,7 +125,6 @@ app.commandLine.appendSwitch('disable-frame-rate-limit');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
 
 app.whenReady().then(() => {
   createSplashWindow();
@@ -151,8 +163,15 @@ ipcMain.handle('get-window-state', () => ({
 ipcMain.handle('get-settings', () => ({
   downloadPath,
   installedGames,
-  downloadHistory
+  downloadHistory,
+  settings
 }));
+
+ipcMain.handle('save-settings', (event, newSettings) => {
+  settings = { ...settings, ...newSettings };
+  store.set('settings', settings);
+  return { success: true };
+});
 
 ipcMain.handle('set-download-path', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -166,6 +185,44 @@ ipcMain.handle('set-download-path', async () => {
     return downloadPath;
   }
   return null;
+});
+
+// Get system info
+ipcMain.handle('get-system-info', async () => {
+  const os = require('os');
+  
+  return {
+    os: `${os.type()} ${os.release()}`,
+    cpu: os.cpus()[0]?.model || 'Unknown',
+    ram: `${Math.round(os.totalmem() / (1024 * 1024 * 1024))} GB`,
+    freeMem: `${Math.round(os.freemem() / (1024 * 1024 * 1024))} GB`,
+    platform: os.platform(),
+    arch: os.arch()
+  };
+});
+
+// Uninstall launcher
+ipcMain.handle('uninstall-launcher', async () => {
+  try {
+    const uninstallerPath = path.join(path.dirname(app.getPath('exe')), 'Uninstall KTM Launcher.exe');
+    
+    if (fs.existsSync(uninstallerPath)) {
+      spawn(uninstallerPath, [], { detached: true, stdio: 'ignore' });
+      setTimeout(() => app.quit(), 500);
+      return { success: true };
+    }
+    
+    return { success: false, error: 'Uninstaller not found' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Clear download history
+ipcMain.handle('clear-download-history', () => {
+  downloadHistory = [];
+  store.set('downloadHistory', downloadHistory);
+  return { success: true };
 });
 
 // Select exe file for game
@@ -183,7 +240,6 @@ ipcMain.handle('select-exe', async (event, gameId) => {
   });
 
   if (!result.canceled && result.filePaths[0]) {
-    // Update the game's exePath
     const gameIndex = installedGames.findIndex(g => g.gameId === gameId);
     if (gameIndex !== -1) {
       installedGames[gameIndex].exePath = result.filePaths[0];
@@ -194,8 +250,102 @@ ipcMain.handle('select-exe', async (event, gameId) => {
   return { success: false, error: 'لم يتم اختيار ملف' };
 });
 
+// Resolve Gofile direct download link
+async function resolveGofileLink(url) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Extract content ID from URL
+      const match = url.match(/gofile\.io\/d\/([a-zA-Z0-9-]+)/);
+      if (!match) {
+        resolve(url); // Not a gofile link, return as-is
+        return;
+      }
+      
+      const contentId = match[1];
+      
+      // Step 1: Create guest account to get token
+      const tokenResponse = await fetchJson('https://api.gofile.io/accounts', 'POST');
+      if (tokenResponse.status !== 'ok') {
+        reject(new Error('Failed to create Gofile guest account'));
+        return;
+      }
+      
+      const token = tokenResponse.data.token;
+      
+      // Step 2: Get content info with token
+      const contentResponse = await fetchJson(`https://api.gofile.io/contents/${contentId}?wt=4fd6sg89d7s6&cache=true`, 'GET', {
+        'Authorization': `Bearer ${token}`
+      });
+      
+      if (contentResponse.status !== 'ok') {
+        reject(new Error('Failed to get Gofile content'));
+        return;
+      }
+      
+      // Step 3: Extract first file's direct link
+      const contents = contentResponse.data.children || contentResponse.data.contents;
+      if (!contents) {
+        reject(new Error('No files found in Gofile'));
+        return;
+      }
+      
+      // Get the first file
+      const files = Object.values(contents);
+      if (files.length === 0) {
+        reject(new Error('No files found'));
+        return;
+      }
+      
+      const file = files[0];
+      const directLink = file.link || file.directLink;
+      const fileName = file.name;
+      
+      if (!directLink) {
+        reject(new Error('No direct link found'));
+        return;
+      }
+      
+      resolve({ directLink, fileName, token });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// Helper function for JSON fetch
+function fetchJson(url, method = 'GET', headers = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: method,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...headers
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 // Download game - Single download at a time
-ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, gameSlug }) => {
+ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, gameSlug, gameImage }) => {
   // Cancel any existing download
   if (currentDownloadRequest) {
     try {
@@ -204,7 +354,7 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
     currentDownloadRequest = null;
   }
   
-  // Clear active downloads (only one allowed)
+  // Clear active downloads
   for (const [id, data] of activeDownloads) {
     mainWindow?.webContents.send('download-status', {
       downloadId: id,
@@ -214,29 +364,74 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
   }
   activeDownloads.clear();
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const gameFolder = path.join(downloadPath, gameSlug);
     
-    // Create game folder first
     if (!fs.existsSync(gameFolder)) {
       fs.mkdirSync(gameFolder, { recursive: true });
     }
     
-    // ZIP file goes inside the game folder
-    const zipPath = path.join(gameFolder, `${gameSlug}.zip`);
-
     const downloadId = `${gameId}-${Date.now()}`;
+    let finalUrl = downloadUrl;
+    let fileName = `${gameSlug}.zip`;
+    let gofileToken = null;
     
-    const protocol = downloadUrl.startsWith('https') ? https : http;
+    // Check if it's a Gofile link and resolve it
+    if (downloadUrl.includes('gofile.io/d/')) {
+      try {
+        mainWindow?.webContents.send('download-status', {
+          downloadId,
+          gameId,
+          status: 'resolving',
+          message: 'جاري استخراج رابط التحميل المباشر...'
+        });
+        
+        const resolved = await resolveGofileLink(downloadUrl);
+        finalUrl = resolved.directLink;
+        fileName = resolved.fileName || fileName;
+        gofileToken = resolved.token;
+      } catch (err) {
+        mainWindow?.webContents.send('download-error', {
+          downloadId,
+          gameId,
+          error: 'فشل في استخراج رابط Gofile: ' + err.message
+        });
+        reject(err);
+        return;
+      }
+    }
     
-    const request = protocol.get(downloadUrl, { timeout: 30000 }, (response) => {
+    // Determine file extension
+    const isRar = fileName.toLowerCase().endsWith('.rar') || finalUrl.toLowerCase().includes('.rar');
+    const extension = isRar ? '.rar' : '.zip';
+    const archivePath = path.join(gameFolder, `${gameSlug}${extension}`);
+    
+    const protocol = finalUrl.startsWith('https') ? https : http;
+    
+    const requestHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': '*/*',
+      'Accept-Encoding': 'gzip, deflate, br'
+    };
+    
+    // Add Gofile cookie if we have token
+    if (gofileToken) {
+      requestHeaders['Cookie'] = `accountToken=${gofileToken}`;
+    }
+    
+    const request = protocol.get(finalUrl, { 
+      timeout: 60000,
+      headers: requestHeaders
+    }, (response) => {
       // Handle redirects
-      if (response.statusCode === 301 || response.statusCode === 302) {
+      if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 303 || response.statusCode === 307) {
         const redirectUrl = response.headers.location;
-        const redirectProtocol = redirectUrl.startsWith('https') ? https : http;
-        const redirectRequest = redirectProtocol.get(redirectUrl, { timeout: 30000 }, handleResponse);
-        redirectRequest.on('error', handleError);
-        currentDownloadRequest = redirectRequest;
+        handleDownload(redirectUrl);
+        return;
+      }
+      
+      if (response.statusCode !== 200) {
+        handleError(new Error(`HTTP ${response.statusCode}`));
         return;
       }
       
@@ -244,33 +439,53 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
     });
 
     currentDownloadRequest = request;
+    
+    function handleDownload(url) {
+      const proto = url.startsWith('https') ? https : http;
+      const redirectRequest = proto.get(url, { 
+        timeout: 60000,
+        headers: requestHeaders
+      }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303 || res.statusCode === 307) {
+          handleDownload(res.headers.location);
+          return;
+        }
+        handleResponse(res);
+      });
+      redirectRequest.on('error', handleError);
+      currentDownloadRequest = redirectRequest;
+    }
 
     function handleResponse(response) {
       const totalSize = parseInt(response.headers['content-length'], 10) || 0;
       let downloadedSize = 0;
       
-      const fileStream = fs.createWriteStream(zipPath);
+      const fileStream = fs.createWriteStream(archivePath);
       
       activeDownloads.set(downloadId, {
         gameId,
         gameTitle,
         gameSlug,
+        gameImage,
         totalSize,
         downloadedSize: 0,
         progress: 0,
         status: 'downloading',
-        startTime: Date.now()
+        startTime: Date.now(),
+        archivePath,
+        isRar
       });
 
-      // Send initial progress
       mainWindow?.webContents.send('download-progress', {
         downloadId,
         gameId,
         gameTitle,
+        gameImage,
         progress: 0,
         downloadedSize: 0,
         totalSize,
-        speed: 0
+        speed: 0,
+        status: 'downloading'
       });
 
       response.on('data', (chunk) => {
@@ -287,10 +502,12 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
           downloadId,
           gameId,
           gameTitle,
+          gameImage,
           progress,
           downloadedSize,
           totalSize,
-          speed: calculateSpeed(downloadedSize, activeDownloads.get(downloadId)?.startTime || Date.now())
+          speed: calculateSpeed(downloadedSize, activeDownloads.get(downloadId)?.startTime || Date.now()),
+          status: 'downloading'
         });
       });
 
@@ -300,71 +517,93 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
         fileStream.close();
         currentDownloadRequest = null;
         
-        const downloadData = activeDownloads.get(downloadId);
-        if (downloadData) {
-          downloadData.status = 'extracting';
-        }
-        
-        mainWindow?.webContents.send('download-status', {
-          downloadId,
-          gameId,
-          status: 'extracting'
-        });
+        // Check if auto-extract is enabled
+        if (settings.autoExtract) {
+          mainWindow?.webContents.send('download-status', {
+            downloadId,
+            gameId,
+            status: 'extracting',
+            message: 'جاري فك الضغط...'
+          });
 
-        try {
-          // Extract ZIP
-          const zip = new AdmZip(zipPath);
-          zip.extractAllTo(gameFolder, true);
-          
-          // Delete ZIP after extraction
-          fs.unlinkSync(zipPath);
-          
-          // Find executable (but don't auto-set, let user choose on first launch)
-          const exePath = findExecutable(gameFolder);
-          
-          // Save to installed games
-          const installedGame = {
-            gameId,
-            gameTitle,
-            gameSlug,
-            installPath: gameFolder,
-            exePath, // This might be null, user will select on first launch
-            installedAt: new Date().toISOString(),
-            size: getFolderSize(gameFolder)
-          };
-          
-          installedGames.push(installedGame);
-          store.set('installedGames', installedGames);
-          
-          // Add to download history
-          downloadHistory.unshift({
-            ...installedGame,
-            downloadedAt: new Date().toISOString()
-          });
-          downloadHistory = downloadHistory.slice(0, 50);
-          store.set('downloadHistory', downloadHistory);
-          
-          activeDownloads.delete(downloadId);
-          
-          mainWindow?.webContents.send('download-complete', {
-            downloadId,
-            gameId,
-            gameTitle,
-            installPath: gameFolder,
-            exePath
-          });
-          
-          resolve({ success: true, installPath: gameFolder, exePath });
-        } catch (extractError) {
-          activeDownloads.delete(downloadId);
-          mainWindow?.webContents.send('download-error', {
-            downloadId,
-            gameId,
-            error: 'فشل في استخراج الملفات'
-          });
-          reject(extractError);
+          try {
+            await extractArchive(archivePath, gameFolder, isRar);
+            
+            // Delete archive after extraction if enabled
+            if (settings.deleteArchiveAfterExtract && fs.existsSync(archivePath)) {
+              fs.unlinkSync(archivePath);
+            }
+            
+            completeDownload();
+          } catch (extractError) {
+            console.error('Extraction error:', extractError);
+            mainWindow?.webContents.send('download-error', {
+              downloadId,
+              gameId,
+              error: 'فشل في فك الضغط: ' + extractError.message
+            });
+            activeDownloads.delete(downloadId);
+            reject(extractError);
+          }
+        } else {
+          completeDownload();
         }
       });
+      
+      function completeDownload() {
+        const exePath = findExecutable(gameFolder);
+        
+        // Create instructions file
+        createInstructionsFile(gameFolder, gameTitle);
+        
+        const installedGame = {
+          gameId,
+          gameTitle,
+          gameSlug,
+          gameImage,
+          installPath: gameFolder,
+          exePath,
+          installedAt: new Date().toISOString(),
+          size: getFolderSize(gameFolder)
+        };
+        
+        // Check if already exists
+        const existingIndex = installedGames.findIndex(g => g.gameId === gameId);
+        if (existingIndex !== -1) {
+          installedGames[existingIndex] = installedGame;
+        } else {
+          installedGames.push(installedGame);
+        }
+        store.set('installedGames', installedGames);
+        
+        downloadHistory.unshift({
+          ...installedGame,
+          downloadedAt: new Date().toISOString()
+        });
+        downloadHistory = downloadHistory.slice(0, 50);
+        store.set('downloadHistory', downloadHistory);
+        
+        activeDownloads.delete(downloadId);
+        
+        // Show notification if enabled
+        if (settings.notifications && Notification.isSupported()) {
+          new Notification({
+            title: 'اكتمل التنزيل',
+            body: `تم تحميل ${gameTitle} بنجاح!`,
+            icon: path.join(__dirname, 'assets', 'icon.png')
+          }).show();
+        }
+        
+        mainWindow?.webContents.send('download-complete', {
+          downloadId,
+          gameId,
+          gameTitle,
+          installPath: gameFolder,
+          exePath
+        });
+        
+        resolve({ success: true, installPath: gameFolder, exePath });
+      }
 
       fileStream.on('error', (err) => {
         currentDownloadRequest = null;
@@ -397,6 +636,94 @@ ipcMain.handle('download-game', async (event, { gameId, gameTitle, downloadUrl, 
   });
 });
 
+// Extract archive (ZIP or RAR)
+async function extractArchive(archivePath, destFolder, isRar) {
+  return new Promise((resolve, reject) => {
+    if (isRar) {
+      // Try using system unrar or 7zip
+      const unrarPaths = [
+        'unrar',
+        'C:\\Program Files\\WinRAR\\UnRAR.exe',
+        'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe',
+        '7z',
+        'C:\\Program Files\\7-Zip\\7z.exe',
+        'C:\\Program Files (x86)\\7-Zip\\7z.exe'
+      ];
+      
+      let extracted = false;
+      
+      const tryExtract = (index) => {
+        if (index >= unrarPaths.length) {
+          // If all failed, try basic extraction
+          reject(new Error('لم يتم العثور على برنامج لفك ضغط RAR. يرجى تثبيت WinRAR أو 7-Zip'));
+          return;
+        }
+        
+        const extractorPath = unrarPaths[index];
+        const isSevenZip = extractorPath.includes('7z');
+        
+        const args = isSevenZip 
+          ? ['x', '-y', `-o${destFolder}`, archivePath]
+          : ['x', '-y', archivePath, destFolder];
+        
+        const process = spawn(extractorPath, args, { windowsHide: true });
+        
+        process.on('close', (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            tryExtract(index + 1);
+          }
+        });
+        
+        process.on('error', () => {
+          tryExtract(index + 1);
+        });
+      };
+      
+      tryExtract(0);
+    } else {
+      // ZIP extraction using AdmZip
+      try {
+        const zip = new AdmZip(archivePath);
+        zip.extractAllTo(destFolder, true);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    }
+  });
+}
+
+// Create instructions file
+function createInstructionsFile(gameFolder, gameTitle) {
+  const instructionsPath = path.join(gameFolder, 'KTM_تعليمات.txt');
+  if (!fs.existsSync(instructionsPath)) {
+    const instructions = `=== تعليمات تشغيل اللعبة ===
+
+اسم اللعبة: ${gameTitle}
+
+إذا لم يتم العثور على ملف التشغيل (.exe) تلقائياً:
+
+1. افتح مجلد اللعبة من المكتبة
+2. ابحث عن ملف .exe الرئيسي للعبة (عادة يكون باسم اللعبة)
+3. عند الضغط على "تشغيل" لأول مرة، سيُطلب منك تحديد ملف .exe
+4. بعد التحديد، سيتم حفظ المسار ولن تحتاج لتحديده مرة أخرى
+
+=== إنشاء اختصار ===
+
+لإنشاء اختصار على سطح المكتب:
+1. ابحث عن ملف .exe الرئيسي داخل المجلد
+2. انقر بزر الماوس الأيمن عليه
+3. اختر "إرسال إلى" > "سطح المكتب (إنشاء اختصار)"
+
+=== ملاحظة ===
+تم تحميل هذه اللعبة من موقع KTM Games
+`;
+    fs.writeFileSync(instructionsPath, instructions, 'utf8');
+  }
+}
+
 // Cancel download
 ipcMain.handle('cancel-download', (event, downloadId) => {
   if (currentDownloadRequest) {
@@ -419,10 +746,12 @@ ipcMain.handle('get-active-downloads', () => {
     downloadId: id,
     gameId: data.gameId,
     gameTitle: data.gameTitle,
+    gameImage: data.gameImage,
     progress: data.progress || 0,
     downloadedSize: data.downloadedSize || 0,
     totalSize: data.totalSize || 0,
-    speed: calculateSpeed(data.downloadedSize || 0, data.startTime || Date.now())
+    speed: calculateSpeed(data.downloadedSize || 0, data.startTime || Date.now()),
+    status: data.status || 'downloading'
   }));
 });
 
@@ -432,7 +761,7 @@ ipcMain.handle('get-installed-games', () => installedGames);
 // Get download history
 ipcMain.handle('get-download-history', () => downloadHistory);
 
-// Scan download folder for games and validate against website
+// Scan download folder for games
 ipcMain.handle('scan-games-folder', async (event, websiteGames) => {
   try {
     if (!fs.existsSync(downloadPath)) {
@@ -448,65 +777,34 @@ ipcMain.handle('scan-games-folder', async (event, websiteGames) => {
     for (const folderName of folders) {
       const folderPath = path.join(downloadPath, folderName);
       
-      // Check if this folder matches a game from the website (by slug)
       const matchedGame = websiteGames.find(g => g.slug === folderName);
       
       if (!matchedGame) {
-        // Game not on website, skip it
         continue;
       }
 
-      // Check if there's an exe file in the folder
       const exePath = findExecutable(folderPath);
       
-      // Create instructions.txt if it doesn't exist
-      const instructionsPath = path.join(folderPath, 'KTM_تعليمات.txt');
-      if (!fs.existsSync(instructionsPath)) {
-        const instructions = `=== تعليمات تشغيل اللعبة ===
+      createInstructionsFile(folderPath, matchedGame.title);
 
-اسم اللعبة: ${matchedGame.title}
-
-إذا لم يتم العثور على ملف التشغيل (.exe) تلقائياً:
-
-1. افتح مجلد اللعبة من المكتبة
-2. ابحث عن ملف .exe الرئيسي للعبة (عادة يكون باسم اللعبة)
-3. عند الضغط على "تشغيل" لأول مرة، سيُطلب منك تحديد ملف .exe
-4. بعد التحديد، سيتم حفظ المسار ولن تحتاج لتحديده مرة أخرى
-
-=== إنشاء اختصار ===
-
-لإنشاء اختصار على سطح المكتب:
-1. ابحث عن ملف .exe الرئيسي داخل المجلد
-2. انقر بزر الماوس الأيمن عليه
-3. اختر "إرسال إلى" > "سطح المكتب (إنشاء اختصار)"
-
-=== ملاحظة ===
-تم تحميل هذه اللعبة من موقع KTM Games
-`;
-        fs.writeFileSync(instructionsPath, instructions, 'utf8');
-      }
-
-      // Check if already in installedGames
       const existingGame = installedGames.find(g => g.gameId === matchedGame.id);
       
       if (!existingGame) {
-        // Add to detected games
         const gameInfo = {
           gameId: matchedGame.id,
           gameTitle: matchedGame.title,
           gameSlug: matchedGame.slug,
+          gameImage: matchedGame.image,
           installPath: folderPath,
           exePath: exePath,
           installedAt: new Date().toISOString(),
           size: getFolderSize(folderPath)
         };
         detectedGames.push(gameInfo);
-        
-        // Add to installedGames
         installedGames.push(gameInfo);
       } else {
-        // Update existing game info
         existingGame.installPath = folderPath;
+        existingGame.gameImage = matchedGame.image;
         if (!existingGame.exePath || !fs.existsSync(existingGame.exePath)) {
           existingGame.exePath = exePath;
         }
@@ -515,7 +813,6 @@ ipcMain.handle('scan-games-folder', async (event, websiteGames) => {
       }
     }
 
-    // Clean up installedGames - remove games that no longer exist in folder
     installedGames = installedGames.filter(game => {
       return fs.existsSync(game.installPath);
     });
@@ -533,19 +830,16 @@ ipcMain.handle('scan-games-folder', async (event, websiteGames) => {
 ipcMain.handle('launch-game', async (event, { gameId, exePath }) => {
   const game = installedGames.find(g => g.gameId === gameId);
   
-  // If exePath provided and exists, use it
   if (exePath && fs.existsSync(exePath)) {
     shell.openPath(exePath);
     return { success: true };
   }
   
-  // If game has saved exePath
   if (game?.exePath && fs.existsSync(game.exePath)) {
     shell.openPath(game.exePath);
     return { success: true };
   }
   
-  // No exe found - need user to select
   return { success: false, needsExeSelection: true, installPath: game?.installPath };
 });
 
@@ -593,7 +887,6 @@ function findExecutable(folderPath) {
   try {
     const files = fs.readdirSync(folderPath, { withFileTypes: true });
     
-    // First, look for .exe files in the root
     for (const file of files) {
       if (file.isFile() && file.name.toLowerCase().endsWith('.exe')) {
         const skipNames = ['unins', 'setup', 'install', 'update', 'redist', 'vcredist', 'dxsetup', 'directx', 'dotnet'];
@@ -604,7 +897,6 @@ function findExecutable(folderPath) {
       }
     }
     
-    // Then search in subdirectories (max 2 levels deep)
     for (const file of files) {
       if (file.isDirectory()) {
         const subExe = findExecutableShallow(path.join(folderPath, file.name), 1);
