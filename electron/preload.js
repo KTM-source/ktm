@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
+  getWindowState: () => ipcRenderer.invoke('get-window-state'),
   
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
@@ -35,6 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onDownloadError: (callback) => {
     ipcRenderer.on('download-error', (event, data) => callback(data));
+  },
+  onWindowMaximized: (callback) => {
+    ipcRenderer.on('window-maximized', (event, isMaximized) => callback(isMaximized));
   },
   
   // Remove listeners

@@ -9,6 +9,7 @@ const Store = require('electron-store');
 const store = new Store();
 
 let mainWindow;
+let splashWindow;
 let downloadPath = store.get('downloadPath') || path.join(app.getPath('downloads'), 'KTM Games');
 let activeDownloads = new Map();
 let installedGames = store.get('installedGames') || [];
@@ -19,7 +20,27 @@ if (!fs.existsSync(downloadPath)) {
   fs.mkdirSync(downloadPath, { recursive: true });
 }
 
-function createWindow() {
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 500,
+    height: 400,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    },
+    icon: path.join(__dirname, 'assets', 'icon.png')
+  });
+
+  splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  splashWindow.center();
+}
+
+function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -27,11 +48,11 @@ function createWindow() {
     minHeight: 700,
     frame: false,
     titleBarStyle: 'hidden',
+    show: false, // Don't show until ready
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      // Allow loading external site with preload
       webSecurity: true
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
@@ -41,12 +62,36 @@ function createWindow() {
   // Load the official KTM website
   mainWindow.loadURL('https://ktm.lovable.app/');
 
+  // Show main window when ready and close splash
+  mainWindow.once('ready-to-show', () => {
+    setTimeout(() => {
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close();
+        splashWindow = null;
+      }
+      mainWindow.show();
+      mainWindow.focus();
+    }, 2500); // Show splash for at least 2.5 seconds
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Handle maximize state for UI updates
+  mainWindow.on('maximize', () => {
+    mainWindow.webContents.send('window-maximized', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow.webContents.send('window-maximized', false);
+  });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createSplashWindow();
+  createMainWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -56,7 +101,7 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (mainWindow === null) {
-    createWindow();
+    createMainWindow();
   }
 });
 
@@ -70,6 +115,11 @@ ipcMain.on('window-maximize', () => {
   }
 });
 ipcMain.on('window-close', () => mainWindow?.close());
+
+// Get window state
+ipcMain.handle('get-window-state', () => ({
+  isMaximized: mainWindow?.isMaximized() || false
+}));
 
 // Settings
 ipcMain.handle('get-settings', () => ({

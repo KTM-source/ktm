@@ -1,13 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Square, X, Maximize2, Minimize2 } from 'lucide-react';
 
 const LauncherTitleBar = () => {
   const [isElectron, setIsElectron] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     const checkElectron = () => {
       const electron = !!(window as any).electronAPI?.isElectron;
       setIsElectron(electron);
+      
+      if (electron) {
+        // Get initial window state
+        (window as any).electronAPI?.getWindowState?.().then((state: { isMaximized: boolean }) => {
+          setIsMaximized(state?.isMaximized || false);
+        });
+        
+        // Listen for maximize/unmaximize events
+        (window as any).electronAPI?.onWindowMaximized?.((maximized: boolean) => {
+          setIsMaximized(maximized);
+        });
+      }
     };
     checkElectron();
     const timer = setTimeout(checkElectron, 100);
@@ -27,18 +40,25 @@ const LauncherTitleBar = () => {
         <button
           onClick={() => (window as any).electronAPI?.minimize()}
           className="h-8 w-10 flex items-center justify-center hover:bg-muted/50 transition-colors"
+          title="تصغير"
         >
           <Minus className="w-3.5 h-3.5 text-foreground/70" />
         </button>
         <button
           onClick={() => (window as any).electronAPI?.maximize()}
           className="h-8 w-10 flex items-center justify-center hover:bg-muted/50 transition-colors"
+          title={isMaximized ? "استعادة" : "تكبير"}
         >
-          <Square className="w-3 h-3 text-foreground/70" />
+          {isMaximized ? (
+            <Minimize2 className="w-3 h-3 text-foreground/70" />
+          ) : (
+            <Maximize2 className="w-3 h-3 text-foreground/70" />
+          )}
         </button>
         <button
           onClick={() => (window as any).electronAPI?.close()}
           className="h-8 w-10 flex items-center justify-center hover:bg-destructive/80 transition-colors group"
+          title="إغلاق"
         >
           <X className="w-4 h-4 text-foreground/70 group-hover:text-white" />
         </button>

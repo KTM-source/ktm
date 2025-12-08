@@ -24,6 +24,7 @@ interface ElectronAPI {
   minimize: () => void;
   maximize: () => void;
   close: () => void;
+  getWindowState: () => Promise<{ isMaximized: boolean }>;
   getSettings: () => Promise<{ downloadPath: string; installedGames: InstalledGame[]; downloadHistory: InstalledGame[] }>;
   setDownloadPath: () => Promise<string | null>;
   downloadGame: (data: { gameId: string; gameTitle: string; downloadUrl: string; gameSlug: string }) => Promise<{ success: boolean; installPath?: string; exePath?: string }>;
@@ -39,6 +40,7 @@ interface ElectronAPI {
   onDownloadStatus: (callback: (data: { downloadId: string; gameId: string; status: string }) => void) => void;
   onDownloadComplete: (callback: (data: { downloadId: string; gameId: string; gameTitle: string; installPath: string; exePath: string | null }) => void) => void;
   onDownloadError: (callback: (data: { downloadId: string; gameId: string; error: string }) => void) => void;
+  onWindowMaximized: (callback: (isMaximized: boolean) => void) => void;
   removeAllListeners: (channel: string) => void;
   isElectron: boolean;
 }
