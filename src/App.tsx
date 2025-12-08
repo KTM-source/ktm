@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/contexts/AuthContext";
+import LauncherWrapper from "@/components/launcher/LauncherWrapper";
 import Index from "./pages/Index";
 import Games from "./pages/Games";
 import GameDetails from "./pages/GameDetails";
@@ -63,6 +64,7 @@ const App = () => {
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <LauncherWrapper>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/games" element={<Games />} />
@@ -92,6 +94,7 @@ const App = () => {
                 <Route path="/:slug" element={<GameDetails />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </LauncherWrapper>
             </BrowserRouter>
           </TooltipProvider>
         </AuthProvider>

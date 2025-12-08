@@ -17,6 +17,7 @@ import { GameComments } from "@/components/games/GameComments";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAuth } from "@/hooks/useAuth";
+import GameDownloadButton from "@/components/launcher/GameDownloadButton";
 import {
   Download,
   Star,
@@ -358,17 +359,13 @@ const GameDetails = () => {
               )}
 
               {game.download_link && (
-                <button
-                  onClick={() => {
-                    incrementStat('games_downloaded');
-                    window.location.href = game.download_link!;
-                  }}
+                <GameDownloadButton
+                  gameId={game.id}
+                  gameTitle={game.title}
+                  gameSlug={game.slug}
+                  downloadUrl={game.download_link}
                   className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-lg animate-scale-in"
-                  style={{ animationDelay: '0.3s' }}
-                >
-                  <Download className="w-5 h-5 relative z-10" />
-                  <span className="font-bold relative z-10">تحميل اللعبة</span>
-                </button>
+                />
               )}
             </div>
           </div>
