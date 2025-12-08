@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -30,22 +30,16 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Allow loading external site with preload
+      webSecurity: true
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#0a0a0f'
   });
 
-  // Load the React app - in production, dist is copied next to main.js
-  const indexPath = path.join(__dirname, 'dist', 'index.html');
-  
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:8080');
-  } else if (fs.existsSync(indexPath)) {
-    mainWindow.loadFile(indexPath);
-  } else {
-    mainWindow.loadURL(`data:text/html,<h1 style="color:white;background:#0a0a0f;height:100vh;display:flex;align-items:center;justify-content:center;margin:0;font-family:Arial;">تأكد من تنفيذ npm run build أولاً</h1>`);
-  }
+  // Load the official KTM website
+  mainWindow.loadURL('https://ktm.lovable.app/');
 
   mainWindow.on('closed', () => {
     mainWindow = null;
