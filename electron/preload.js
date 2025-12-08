@@ -9,7 +9,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
   setDownloadPath: () => ipcRenderer.invoke('set-download-path'),
+  getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
+  uninstallLauncher: () => ipcRenderer.invoke('uninstall-launcher'),
+  clearDownloadHistory: () => ipcRenderer.invoke('clear-download-history'),
   
   // Downloads
   downloadGame: (data) => ipcRenderer.invoke('download-game', data),

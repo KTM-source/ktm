@@ -4,16 +4,19 @@ interface DownloadProgress {
   downloadId: string;
   gameId: string;
   gameTitle: string;
+  gameImage?: string;
   progress: number;
   downloadedSize: number;
   totalSize: number;
   speed: number;
+  status?: string;
 }
 
 interface InstalledGame {
   gameId: string;
   gameTitle: string;
   gameSlug: string;
+  gameImage?: string;
   installPath: string;
   exePath: string | null;
   installedAt: string;
@@ -31,6 +34,22 @@ interface WebsiteGame {
   id: string;
   title: string;
   slug: string;
+  image?: string;
+}
+
+interface Settings {
+  autoUpdate: boolean;
+  notifications: boolean;
+  autoLaunch: boolean;
+  minimizeToTray: boolean;
+  hardwareAcceleration: boolean;
+  theme: string;
+  language: string;
+  downloadSpeed: number;
+  autoExtract: boolean;
+  deleteArchiveAfterExtract: boolean;
+  verifyIntegrity: boolean;
+  soundEffects: boolean;
 }
 
 interface ElectronAPI {
@@ -38,9 +57,13 @@ interface ElectronAPI {
   maximize: () => void;
   close: () => void;
   getWindowState: () => Promise<{ isMaximized: boolean }>;
-  getSettings: () => Promise<{ downloadPath: string; installedGames: InstalledGame[]; downloadHistory: InstalledGame[] }>;
+  getSettings: () => Promise<{ downloadPath: string; installedGames: InstalledGame[]; downloadHistory: InstalledGame[]; settings: Settings }>;
+  saveSettings: (settings: Partial<Settings>) => Promise<{ success: boolean }>;
   setDownloadPath: () => Promise<string | null>;
-  downloadGame: (data: { gameId: string; gameTitle: string; downloadUrl: string; gameSlug: string }) => Promise<{ success: boolean; installPath?: string; exePath?: string }>;
+  getSystemInfo: () => Promise<{ os: string; cpu: string; ram: string; freeMem: string; platform: string; arch: string }>;
+  uninstallLauncher: () => Promise<{ success: boolean; error?: string }>;
+  clearDownloadHistory: () => Promise<{ success: boolean }>;
+  downloadGame: (data: { gameId: string; gameTitle: string; downloadUrl: string; gameSlug: string; gameImage?: string }) => Promise<{ success: boolean; installPath?: string; exePath?: string }>;
   cancelDownload: (downloadId: string) => Promise<boolean>;
   getActiveDownloads: () => Promise<DownloadProgress[]>;
   getDownloadHistory: () => Promise<InstalledGame[]>;
@@ -52,7 +75,7 @@ interface ElectronAPI {
   selectExe: (gameId: string) => Promise<{ success: boolean; exePath?: string; error?: string }>;
   scanGamesFolder: (websiteGames: WebsiteGame[]) => Promise<{ success: boolean; games?: InstalledGame[]; error?: string }>;
   onDownloadProgress: (callback: (data: DownloadProgress) => void) => void;
-  onDownloadStatus: (callback: (data: { downloadId: string; gameId: string; status: string }) => void) => void;
+  onDownloadStatus: (callback: (data: { downloadId: string; gameId: string; status: string; message?: string }) => void) => void;
   onDownloadComplete: (callback: (data: { downloadId: string; gameId: string; gameTitle: string; installPath: string; exePath: string | null }) => void) => void;
   onDownloadError: (callback: (data: { downloadId: string; gameId: string; error: string }) => void) => void;
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => void;
@@ -72,30 +95,26 @@ export const useElectron = () => {
   const [activeDownloads, setActiveDownloads] = useState<DownloadProgress[]>([]);
   const [installedGames, setInstalledGames] = useState<InstalledGame[]>([]);
   const [downloadHistory, setDownloadHistory] = useState<InstalledGame[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
 
   useEffect(() => {
     const initElectron = () => {
       const electron = window.electronAPI?.isElectron;
-      console.log('Checking Electron API:', !!electron, window.electronAPI);
       setIsElectron(!!electron);
 
       if (electron) {
-        // Load initial settings
-        window.electronAPI?.getSettings().then((settings) => {
-          setDownloadPath(settings.downloadPath);
-          setInstalledGames(settings.installedGames);
-          setDownloadHistory(settings.downloadHistory);
+        window.electronAPI?.getSettings().then((data) => {
+          setDownloadPath(data.downloadPath);
+          setInstalledGames(data.installedGames);
+          setDownloadHistory(data.downloadHistory);
+          setSettings(data.settings);
         }).catch(console.error);
 
-        // Load active downloads
         window.electronAPI?.getActiveDownloads().then((downloads) => {
-          console.log('Active downloads:', downloads);
           setActiveDownloads(downloads || []);
         }).catch(console.error);
 
-        // Set up event listeners
         window.electronAPI?.onDownloadProgress((data) => {
-          console.log('Download progress:', data);
           setActiveDownloads((prev) => {
             const index = prev.findIndex((d) => d.downloadId === data.downloadId);
             if (index >= 0) {
@@ -108,31 +127,19 @@ export const useElectron = () => {
         });
 
         window.electronAPI?.onDownloadComplete((data) => {
-          console.log('Download complete:', data);
           setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== data.downloadId));
-          // Refresh installed games
           window.electronAPI?.getInstalledGames().then(setInstalledGames).catch(console.error);
           window.electronAPI?.getDownloadHistory().then(setDownloadHistory).catch(console.error);
         });
 
         window.electronAPI?.onDownloadError((data) => {
-          console.log('Download error:', data);
           setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== data.downloadId));
-        });
-
-        window.electronAPI?.onDownloadStatus((data) => {
-          console.log('Download status:', data);
         });
       }
     };
 
-    // Check immediately
     initElectron();
-    
-    // Also check after a delay (in case API is injected after initial load)
     const timer = setTimeout(initElectron, 500);
-
-    // Poll for active downloads periodically
     const pollTimer = setInterval(() => {
       if (window.electronAPI?.isElectron) {
         window.electronAPI.getActiveDownloads().then((downloads) => {
@@ -146,35 +153,51 @@ export const useElectron = () => {
     return () => {
       clearTimeout(timer);
       clearInterval(pollTimer);
-      if (window.electronAPI?.isElectron) {
-        window.electronAPI?.removeAllListeners('download-progress');
-        window.electronAPI?.removeAllListeners('download-status');
-        window.electronAPI?.removeAllListeners('download-complete');
-        window.electronAPI?.removeAllListeners('download-error');
-      }
     };
   }, []);
 
   const changeDownloadPath = useCallback(async () => {
     if (!isElectron) return null;
     const newPath = await window.electronAPI?.setDownloadPath();
-    if (newPath) {
-      setDownloadPath(newPath);
-    }
+    if (newPath) setDownloadPath(newPath);
     return newPath;
   }, [isElectron]);
 
-  const downloadGame = useCallback(async (gameId: string, gameTitle: string, downloadUrl: string, gameSlug: string) => {
+  const saveSettings = useCallback(async (newSettings: Partial<Settings>) => {
+    if (!isElectron) return { success: false };
+    const result = await window.electronAPI?.saveSettings(newSettings);
+    if (result?.success) {
+      setSettings(prev => prev ? { ...prev, ...newSettings } : null);
+    }
+    return result;
+  }, [isElectron]);
+
+  const getSystemInfo = useCallback(async () => {
     if (!isElectron) return null;
-    return window.electronAPI?.downloadGame({ gameId, gameTitle, downloadUrl, gameSlug });
+    return window.electronAPI?.getSystemInfo();
+  }, [isElectron]);
+
+  const uninstallLauncher = useCallback(async () => {
+    if (!isElectron) return { success: false };
+    return window.electronAPI?.uninstallLauncher();
+  }, [isElectron]);
+
+  const clearDownloadHistory = useCallback(async () => {
+    if (!isElectron) return { success: false };
+    const result = await window.electronAPI?.clearDownloadHistory();
+    if (result?.success) setDownloadHistory([]);
+    return result;
+  }, [isElectron]);
+
+  const downloadGame = useCallback(async (gameId: string, gameTitle: string, downloadUrl: string, gameSlug: string, gameImage?: string) => {
+    if (!isElectron) return null;
+    return window.electronAPI?.downloadGame({ gameId, gameTitle, downloadUrl, gameSlug, gameImage });
   }, [isElectron]);
 
   const cancelDownload = useCallback(async (downloadId: string) => {
     if (!isElectron) return false;
     const result = await window.electronAPI?.cancelDownload(downloadId);
-    if (result) {
-      setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== downloadId));
-    }
+    if (result) setActiveDownloads((prev) => prev.filter((d) => d.downloadId !== downloadId));
     return result;
   }, [isElectron]);
 
@@ -187,10 +210,7 @@ export const useElectron = () => {
     if (!isElectron) return { success: false };
     const result = await window.electronAPI?.selectExe(gameId);
     if (result?.success) {
-      // Update local state
-      setInstalledGames((prev) => 
-        prev.map((g) => g.gameId === gameId ? { ...g, exePath: result.exePath || null } : g)
-      );
+      setInstalledGames((prev) => prev.map((g) => g.gameId === gameId ? { ...g, exePath: result.exePath || null } : g));
     }
     return result;
   }, [isElectron]);
@@ -198,9 +218,7 @@ export const useElectron = () => {
   const uninstallGame = useCallback(async (gameId: string) => {
     if (!isElectron) return { success: false };
     const result = await window.electronAPI?.uninstallGame(gameId);
-    if (result?.success) {
-      setInstalledGames((prev) => prev.filter((g) => g.gameId !== gameId));
-    }
+    if (result?.success) setInstalledGames((prev) => prev.filter((g) => g.gameId !== gameId));
     return result;
   }, [isElectron]);
 
@@ -214,12 +232,10 @@ export const useElectron = () => {
     return window.electronAPI?.openFolder(path);
   }, [isElectron]);
 
-  const scanGamesFolder = useCallback(async (websiteGames: { id: string; title: string; slug: string }[]) => {
+  const scanGamesFolder = useCallback(async (websiteGames: { id: string; title: string; slug: string; image?: string }[]) => {
     if (!isElectron) return { success: false };
     const result = await window.electronAPI?.scanGamesFolder(websiteGames);
-    if (result?.success && result.games) {
-      setInstalledGames(result.games);
-    }
+    if (result?.success && result.games) setInstalledGames(result.games);
     return result;
   }, [isElectron]);
 
@@ -229,7 +245,12 @@ export const useElectron = () => {
     activeDownloads,
     installedGames,
     downloadHistory,
+    settings,
     changeDownloadPath,
+    saveSettings,
+    getSystemInfo,
+    uninstallLauncher,
+    clearDownloadHistory,
     downloadGame,
     cancelDownload,
     launchGame,
@@ -241,4 +262,4 @@ export const useElectron = () => {
   };
 };
 
-export type { DownloadProgress, InstalledGame };
+export type { DownloadProgress, InstalledGame, Settings };
