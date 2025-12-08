@@ -1,0 +1,67 @@
+{
+  "name": "ktm-launcher",
+  "version": "1.0.0",
+  "description": "KTM Games Launcher - Download and play games",
+  "main": "main.js",
+  "author": "KTM Games",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.ktm.launcher",
+    "productName": "KTM Launcher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "assets/**/*",
+      "../dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "app/dist"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KTM Launcher"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}
