@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Library, Play, Trash2, FolderOpen, Search, HardDrive, RefreshCw, ExternalLink } from 'lucide-react';
+import { Library, Play, Trash2, FolderOpen, Search, HardDrive, RefreshCw, ExternalLink, Gamepad2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useElectron, InstalledGame } from '@/hooks/useElectron';
@@ -25,26 +25,59 @@ const formatSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+interface GameWithImage extends InstalledGame {
+  image?: string;
+  genre?: string;
+}
+
 const LibraryTab = () => {
   const { installedGames, launchGame, uninstallGame, openFolder, scanGamesFolder, isElectron } = useElectron();
   const [searchQuery, setSearchQuery] = useState('');
   const [gameToUninstall, setGameToUninstall] = useState<InstalledGame | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [gamesWithImages, setGamesWithImages] = useState<GameWithImage[]>([]);
   const navigate = useNavigate();
 
-  // Auto-scan on mount and periodically
+  // Auto-scan on mount
   useEffect(() => {
     if (isElectron) {
       scanForGames();
     }
   }, [isElectron]);
 
+  // Fetch game images when installedGames changes
+  useEffect(() => {
+    const fetchGameImages = async () => {
+      if (installedGames.length === 0) {
+        setGamesWithImages([]);
+        return;
+      }
+
+      const gameIds = installedGames.map(g => g.gameId);
+      const { data: gamesData } = await supabase
+        .from('games')
+        .select('id, image, genre')
+        .in('id', gameIds);
+
+      const gamesMap = new Map(gamesData?.map(g => [g.id, { image: g.image, genre: g.genre }]) || []);
+      
+      const enrichedGames = installedGames.map(game => ({
+        ...game,
+        image: gamesMap.get(game.gameId)?.image,
+        genre: gamesMap.get(game.gameId)?.genre
+      }));
+
+      setGamesWithImages(enrichedGames);
+    };
+
+    fetchGameImages();
+  }, [installedGames]);
+
   const scanForGames = async () => {
     if (!isElectron || isScanning) return;
     
     setIsScanning(true);
     try {
-      // Fetch all games from website database
       const { data: websiteGames, error } = await supabase
         .from('games')
         .select('id, title, slug');
@@ -55,7 +88,6 @@ const LibraryTab = () => {
         return;
       }
 
-      // Scan folder with website games list
       const result = await scanGamesFolder(websiteGames || []);
       
       if (result?.success) {
@@ -68,7 +100,7 @@ const LibraryTab = () => {
     }
   };
 
-  const filteredGames = installedGames.filter((game) =>
+  const filteredGames = gamesWithImages.filter((game) =>
     game.gameTitle.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -181,62 +213,107 @@ const GameCard = ({
   onUninstall,
   onViewPage
 }: {
-  game: InstalledGame;
+  game: GameWithImage;
   onLaunch: () => void;
   onOpenFolder: () => void;
   onUninstall: () => void;
   onViewPage: () => void;
 }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
   return (
-    <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl p-4 space-y-4 animate-fade-in hover:border-primary/50 transition-all group">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 cursor-pointer" onClick={onViewPage}>
-          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+    <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl overflow-hidden animate-fade-in hover:border-primary/50 transition-all group">
+      {/* Game Image */}
+      <div 
+        className="relative h-32 bg-gradient-to-br from-muted/50 to-muted cursor-pointer overflow-hidden"
+        onClick={onViewPage}
+      >
+        {game.image && !imageError ? (
+          <>
+            <img
+              src={game.image}
+              alt={game.gameTitle}
+              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${
+                imageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
+            />
+            {!imageLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Gamepad2 className="w-10 h-10 text-muted-foreground/30 animate-pulse" />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Gamepad2 className="w-10 h-10 text-muted-foreground/30" />
+          </div>
+        )}
+        
+        {/* Overlay gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-card/90 via-transparent to-transparent" />
+        
+        {/* Genre badge */}
+        {game.genre && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 bg-primary/80 backdrop-blur-sm rounded text-xs text-primary-foreground">
+            {game.genre.split(',')[0].trim()}
+          </div>
+        )}
+        
+        {/* View page icon */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => { e.stopPropagation(); onViewPage(); }}
+          className="absolute top-2 left-2 w-8 h-8 bg-background/50 backdrop-blur-sm text-foreground/70 hover:text-foreground hover:bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Game Info */}
+      <div className="p-4 space-y-3">
+        <div className="cursor-pointer" onClick={onViewPage}>
+          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
             {game.gameTitle}
           </h3>
           <p className="text-sm text-muted-foreground">
             {formatSize(game.size)}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onViewPage}
-          className="text-muted-foreground hover:text-primary"
-          title="عرض صفحة اللعبة"
-        >
-          <ExternalLink className="w-4 h-4" />
-        </Button>
-      </div>
 
-      <div className="flex items-center gap-2">
-        <Button
-          onClick={onLaunch}
-          className="flex-1 gap-2 bg-primary hover:bg-primary/90"
-        >
-          <Play className="w-4 h-4" />
-          تشغيل
-        </Button>
-        
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onOpenFolder}
-          className="text-muted-foreground hover:text-foreground"
-          title="فتح المجلد"
-        >
-          <FolderOpen className="w-4 h-4" />
-        </Button>
-        
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onUninstall}
-          className="text-muted-foreground hover:text-destructive"
-          title="إلغاء التثبيت"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={onLaunch}
+            className="flex-1 gap-2 bg-primary hover:bg-primary/90"
+            size="sm"
+          >
+            <Play className="w-4 h-4" />
+            تشغيل
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onOpenFolder}
+            className="text-muted-foreground hover:text-foreground h-8 w-8"
+            title="فتح المجلد"
+          >
+            <FolderOpen className="w-4 h-4" />
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onUninstall}
+            className="text-muted-foreground hover:text-destructive h-8 w-8"
+            title="إلغاء التثبيت"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
