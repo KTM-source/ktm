@@ -660,3 +660,154 @@ button, a, input, select, textarea {
 .animate-pulse-glow {
   animation: pulse-glow 4s ease-in-out infinite;
 }
+
+/* ===== LITE MODE FOR ELECTRON LAUNCHER ===== */
+/* Disables heavy animations and effects for better performance in Electron */
+
+.lite-mode {
+  /* Disable all transitions globally */
+  --transition-duration: 0ms !important;
+}
+
+.lite-mode *,
+.lite-mode *::before,
+.lite-mode *::after {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.1s !important;
+  transition-delay: 0ms !important;
+}
+
+/* Keep essential micro-interactions but faster */
+.lite-mode button,
+.lite-mode a,
+.lite-mode input,
+.lite-mode select {
+  transition-duration: 0.1s !important;
+}
+
+/* Disable particle backgrounds */
+.lite-mode .particles,
+.lite-mode .particle-bg,
+.lite-mode [class*="particle"] {
+  display: none !important;
+}
+
+/* Disable glow effects */
+.lite-mode [class*="glow"],
+.lite-mode [class*="shadow-neon"],
+.lite-mode [class*="shadow-glow"] {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* Disable blur effects (heavy on GPU) */
+.lite-mode [class*="blur"],
+.lite-mode [class*="backdrop-blur"],
+.lite-mode .glass-card,
+.lite-mode [class*="glass"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Simplify gradients */
+.lite-mode [class*="bg-gradient"],
+.lite-mode [class*="gradient"] {
+  background-size: 100% 100% !important;
+  animation: none !important;
+}
+
+/* Disable floating/pulse animations */
+.lite-mode .animate-float,
+.lite-mode .animate-pulse,
+.lite-mode .animate-bounce,
+.lite-mode .animate-spin,
+.lite-mode .animate-ping,
+.lite-mode [class*="animate-"] {
+  animation: none !important;
+}
+
+/* Keep fade-in but make it instant */
+.lite-mode .animate-fade-in,
+.lite-mode .animate-enter {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Disable heavy shadows */
+.lite-mode [class*="shadow-lg"],
+.lite-mode [class*="shadow-xl"],
+.lite-mode [class*="shadow-2xl"] {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
+}
+
+/* Disable video autoplay backgrounds if any */
+.lite-mode video[autoplay] {
+  display: none !important;
+}
+
+/* Reduce transform effects */
+.lite-mode .hover\:scale-105:hover,
+.lite-mode .hover\:scale-110:hover,
+.lite-mode .group-hover\:scale-105,
+.lite-mode .group-hover\:scale-110 {
+  transform: none !important;
+}
+
+/* Disable background animations */
+.lite-mode .bg-animation,
+.lite-mode .animated-bg {
+  animation: none !important;
+}
+
+/* Simplify card hovers */
+.lite-mode .game-card:hover,
+.lite-mode .card:hover {
+  transform: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+}
+
+/* Carousel transitions - keep but faster */
+.lite-mode .embla__slide {
+  transition-duration: 0.15s !important;
+}
+
+/* Toast animations */
+.lite-mode [data-sonner-toast],
+.lite-mode [data-radix-toast-viewport] {
+  animation-duration: 0.1s !important;
+}
+
+/* Dialog/Modal animations */
+.lite-mode [data-state="open"],
+.lite-mode [data-state="closed"] {
+  animation-duration: 0.1s !important;
+}
+
+/* Dropdown animations */
+.lite-mode [data-radix-popper-content-wrapper] {
+  animation-duration: 0.05s !important;
+}
+
+/* Skeleton loading - simplify */
+.lite-mode .skeleton,
+.lite-mode [class*="skeleton"] {
+  animation: none !important;
+  background: hsl(var(--muted)) !important;
+}
+
+/* Hero carousel - faster transitions */
+.lite-mode .hero-carousel {
+  transition-duration: 0.2s !important;
+}
+
+/* Disable text gradient animations */
+.lite-mode [class*="bg-clip-text"] {
+  background-size: 100% !important;
+  animation: none !important;
+}
+
+/* Performance optimizations */
+.lite-mode * {
+  will-change: auto !important;
+}

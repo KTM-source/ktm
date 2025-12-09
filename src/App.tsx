@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/contexts/AuthContext";
 import LauncherWrapper from "@/components/launcher/LauncherWrapper";
+import { useLiteMode } from "@/hooks/useLiteMode";
 import Index from "./pages/Index";
 import Games from "./pages/Games";
 import GameDetails from "./pages/GameDetails";
@@ -42,6 +43,9 @@ const removeBadge = () => {
 };
 
 const App = () => {
+  // Initialize lite mode for Electron
+  useLiteMode();
+  
   useEffect(() => {
     // Initial removal
     removeBadge();
