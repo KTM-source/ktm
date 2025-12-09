@@ -71,6 +71,8 @@ function createMainWindow() {
     minHeight: 700,
     frame: false,
     titleBarStyle: 'hidden',
+    transparent: false,
+    hasShadow: true,
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -80,10 +82,11 @@ function createMainWindow() {
       backgroundThrottling: false,
       spellcheck: false,
       v8CacheOptions: 'code',
-      devTools: false // Disable DevTools completely
+      devTools: false
     },
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: settings.theme === 'light' ? '#ffffff' : '#0a0a0f'
+    backgroundColor: settings.theme === 'light' ? '#ffffff' : '#0a0a0f',
+    autoHideMenuBar: true
   });
 
   mainWindow.webContents.setBackgroundThrottling(false);
