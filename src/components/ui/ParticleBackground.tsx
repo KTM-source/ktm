@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface Particle {
   x: number;
@@ -12,27 +12,6 @@ interface Particle {
 
 export const ParticleBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isLiteMode, setIsLiteMode] = useState(false);
-
-  // Check for lite mode
-  useEffect(() => {
-    const checkLiteMode = () => {
-      setIsLiteMode(document.documentElement.classList.contains('lite-mode'));
-    };
-    
-    checkLiteMode();
-    
-    // Watch for class changes
-    const observer = new MutationObserver(checkLiteMode);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    
-    return () => observer.disconnect();
-  }, []);
-
-  // Don't render particles in lite mode
-  if (isLiteMode) {
-    return null;
-  }
   const particlesRef = useRef<Particle[]>([]);
   const mouseRef = useRef({ x: 0, y: 0 });
   const animationRef = useRef<number>();

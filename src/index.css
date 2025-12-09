@@ -662,54 +662,101 @@ button, a, input, select, textarea {
 }
 
 /* ===== LITE MODE FOR ELECTRON LAUNCHER ===== */
-/* ============================================= */
-/* LITE MODE - Remove effects only, keep animations */
-/* ============================================= */
+/* Reduces heavy animations and effects for better performance in Electron */
+/* IMPORTANT: Content must remain visible - only reduce effects intensity */
 
-/* Remove ALL glow effects */
-.lite-mode .shadow-neon-sm,
-.lite-mode .shadow-neon-md,
-.lite-mode .shadow-neon-lg,
-.lite-mode .neon-glow,
-.lite-mode [class*="shadow-glow"],
-.lite-mode [class*="shadow-neon"] {
-  box-shadow: none !important;
+.lite-mode {
+  --transition-duration: 100ms !important;
 }
 
-/* Remove ALL text glow/shadow */
-.lite-mode .neon-text,
-.lite-mode [class*="neon-text"],
-.lite-mode [class*="text-glow"] {
-  text-shadow: none !important;
+/* Faster transitions but NOT zero */
+.lite-mode *,
+.lite-mode *::before,
+.lite-mode *::after {
+  transition-duration: 0.15s !important;
+  transition-delay: 0ms !important;
 }
 
-/* Remove ALL blur effects */
-.lite-mode [class*="backdrop-blur"],
-.lite-mode [class*="blur-"],
-.lite-mode .glass-morphism,
-.lite-mode .glass-card {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+/* Disable ONLY heavy looping animations (particles, floating, pulse) */
+.lite-mode .animate-float,
+.lite-mode .animate-pulse,
+.lite-mode .animate-bounce,
+.lite-mode .animate-spin,
+.lite-mode .animate-ping,
+.lite-mode .animate-pulse-glow {
+  animation: none !important;
 }
 
-/* Remove heavy box shadows */
-.lite-mode .shadow-2xl,
-.lite-mode .shadow-xl,
-.lite-mode .shadow-lg {
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+/* Keep fade-in animations but instant completion */
+.lite-mode .animate-fade-in {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
 }
 
-/* Remove btn-primary glow pseudo-elements */
-.lite-mode .btn-primary::before,
-.lite-mode .btn-primary::after {
-  display: none !important;
-}
-
-/* Remove ring effects */
-.lite-mode [class*="ring-"]:not([class*="ring-0"]) {
-  box-shadow: none !important;
-}
-.lite-mode .game-card::before,
-.lite-mode .game-card::after {
+/* Disable particle backgrounds */
+.lite-mode .particles,
+.lite-mode .particle-bg,
+.lite-mode [class*="particle"]:not(button):not(a):not(img):not(video) {
   opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Reduce glow effects intensity (not remove) */
+.lite-mode [class*="shadow-neon"],
+.lite-mode [class*="shadow-glow"] {
+  box-shadow: 0 0 10px hsl(var(--primary) / 0.15) !important;
+}
+
+/* Reduce blur effects (heavy on GPU) */
+.lite-mode [class*="backdrop-blur-xl"],
+.lite-mode [class*="backdrop-blur-2xl"],
+.lite-mode [class*="backdrop-blur-3xl"] {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.lite-mode [class*="backdrop-blur-lg"],
+.lite-mode [class*="backdrop-blur-md"] {
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+/* Disable animated gradients but keep static gradients */
+.lite-mode [class*="animate-gradient"] {
+  animation: none !important;
+  background-size: 100% 100% !important;
+}
+
+/* Reduce heavy shadows */
+.lite-mode [class*="shadow-2xl"] {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
+}
+
+.lite-mode [class*="shadow-xl"] {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
+}
+
+/* Disable hover scale transforms */
+.lite-mode .hover\:scale-105:hover,
+.lite-mode .hover\:scale-110:hover,
+.lite-mode .group-hover\:scale-105,
+.lite-mode .group-hover\:scale-110 {
+  transform: scale(1.02) !important;
+}
+
+/* Carousel transitions - faster */
+.lite-mode .embla__slide {
+  transition-duration: 0.2s !important;
+}
+
+/* Simplify card hovers */
+.lite-mode .game-card:hover,
+.lite-mode .card:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Performance optimizations */
+.lite-mode * {
+  will-change: auto !important;
 }

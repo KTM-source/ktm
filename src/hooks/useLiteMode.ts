@@ -16,18 +16,19 @@ export const useLiteMode = () => {
       const savedPreference = localStorage.getItem(LITE_MODE_KEY);
       const shouldEnable = savedPreference === null ? true : savedPreference === 'true';
       setIsLiteMode(shouldEnable);
-      
-      if (shouldEnable) {
-        document.documentElement.classList.add('lite-mode');
-        document.body.classList.add('lite-mode');
-      }
+      applyLiteMode(shouldEnable);
+    } else {
+      // Not in Electron - never apply lite mode
+      setIsLiteMode(false);
+      applyLiteMode(false);
     }
+
+    return () => {
+      applyLiteMode(false);
+    };
   }, []);
 
-  const toggleLiteMode = (enabled: boolean) => {
-    setIsLiteMode(enabled);
-    localStorage.setItem(LITE_MODE_KEY, String(enabled));
-    
+  const applyLiteMode = (enabled: boolean) => {
     if (enabled) {
       document.documentElement.classList.add('lite-mode');
       document.body.classList.add('lite-mode');
@@ -35,6 +36,12 @@ export const useLiteMode = () => {
       document.documentElement.classList.remove('lite-mode');
       document.body.classList.remove('lite-mode');
     }
+  };
+
+  const toggleLiteMode = (enabled: boolean) => {
+    setIsLiteMode(enabled);
+    localStorage.setItem(LITE_MODE_KEY, String(enabled));
+    applyLiteMode(enabled);
   };
 
   return { isLiteMode, isElectron, toggleLiteMode };
