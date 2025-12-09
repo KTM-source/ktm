@@ -74,6 +74,9 @@ interface ElectronAPI {
   openFolder: (path: string) => Promise<boolean>;
   selectExe: (gameId: string) => Promise<{ success: boolean; exePath?: string; error?: string }>;
   scanGamesFolder: (websiteGames: WebsiteGame[]) => Promise<{ success: boolean; games?: InstalledGame[]; error?: string }>;
+  cacheGameImage: (data: { gameId: string; imageUrl: string }) => Promise<{ success: boolean; localPath?: string; error?: string }>;
+  getCachedImage: (gameId: string) => Promise<{ success: boolean; localPath?: string }>;
+  clearImageCache: () => Promise<{ success: boolean; error?: string }>;
   onDownloadProgress: (callback: (data: DownloadProgress) => void) => void;
   onDownloadStatus: (callback: (data: { downloadId: string; gameId: string; status: string; message?: string }) => void) => void;
   onDownloadComplete: (callback: (data: { downloadId: string; gameId: string; gameTitle: string; installPath: string; exePath: string | null }) => void) => void;

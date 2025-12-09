@@ -213,12 +213,23 @@ function applyTheme(theme) {
   `);
 }
 
-// Performance optimizations
+// Performance optimizations - Max 300 FPS
 app.commandLine.appendSwitch('disable-gpu-vsync');
 app.commandLine.appendSwitch('disable-frame-rate-limit');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('max-gum-fps', '300');
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
+app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+
+// Game images cache folder
+const gameImagesPath = path.join(app.getPath('userData'), 'games-images');
+if (!fs.existsSync(gameImagesPath)) {
+  fs.mkdirSync(gameImagesPath, { recursive: true });
+}
 
 app.whenReady().then(() => {
   createSplashWindow();
@@ -324,6 +335,102 @@ ipcMain.handle('clear-download-history', () => {
   downloadHistory = [];
   store.set('downloadHistory', downloadHistory);
   return { success: true };
+});
+
+// Cache game image locally
+ipcMain.handle('cache-game-image', async (event, { gameId, imageUrl }) => {
+  try {
+    const gameImagesPath = path.join(app.getPath('userData'), 'games-images');
+    if (!fs.existsSync(gameImagesPath)) {
+      fs.mkdirSync(gameImagesPath, { recursive: true });
+    }
+    
+    const extension = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
+    const imagePath = path.join(gameImagesPath, `${gameId}.${extension}`);
+    
+    // Check if already cached
+    if (fs.existsSync(imagePath)) {
+      return { success: true, localPath: imagePath };
+    }
+    
+    // Download and cache image
+    return new Promise((resolve) => {
+      const protocol = imageUrl.startsWith('https') ? https : http;
+      
+      const request = protocol.get(imageUrl, { 
+        timeout: 10000,
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      }, (response) => {
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          // Handle redirect
+          protocol.get(response.headers.location, (redirectRes) => {
+            const fileStream = fs.createWriteStream(imagePath);
+            redirectRes.pipe(fileStream);
+            fileStream.on('finish', () => {
+              fileStream.close();
+              resolve({ success: true, localPath: imagePath });
+            });
+          }).on('error', () => resolve({ success: false }));
+          return;
+        }
+        
+        if (response.statusCode !== 200) {
+          resolve({ success: false });
+          return;
+        }
+        
+        const fileStream = fs.createWriteStream(imagePath);
+        response.pipe(fileStream);
+        fileStream.on('finish', () => {
+          fileStream.close();
+          resolve({ success: true, localPath: imagePath });
+        });
+        fileStream.on('error', () => resolve({ success: false }));
+      });
+      
+      request.on('error', () => resolve({ success: false }));
+      request.on('timeout', () => {
+        request.destroy();
+        resolve({ success: false });
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Get cached image path
+ipcMain.handle('get-cached-image', async (event, gameId) => {
+  try {
+    const gameImagesPath = path.join(app.getPath('userData'), 'games-images');
+    
+    // Check for common extensions
+    const extensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    for (const ext of extensions) {
+      const imagePath = path.join(gameImagesPath, `${gameId}.${ext}`);
+      if (fs.existsSync(imagePath)) {
+        return { success: true, localPath: imagePath };
+      }
+    }
+    
+    return { success: false };
+  } catch (err) {
+    return { success: false };
+  }
+});
+
+// Clear image cache
+ipcMain.handle('clear-image-cache', async () => {
+  try {
+    const gameImagesPath = path.join(app.getPath('userData'), 'games-images');
+    if (fs.existsSync(gameImagesPath)) {
+      fs.rmSync(gameImagesPath, { recursive: true, force: true });
+      fs.mkdirSync(gameImagesPath, { recursive: true });
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // Select exe file for game

@@ -30,6 +30,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectExe: (gameId) => ipcRenderer.invoke('select-exe', gameId),
   scanGamesFolder: (websiteGames) => ipcRenderer.invoke('scan-games-folder', websiteGames),
   
+  // Image caching
+  cacheGameImage: (data) => ipcRenderer.invoke('cache-game-image', data),
+  getCachedImage: (gameId) => ipcRenderer.invoke('get-cached-image', gameId),
+  clearImageCache: () => ipcRenderer.invoke('clear-image-cache'),
+  
   // Event listeners
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (event, data) => callback(data));
