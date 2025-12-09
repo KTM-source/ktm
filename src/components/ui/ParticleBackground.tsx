@@ -17,6 +17,11 @@ export const ParticleBackground = () => {
   const animationRef = useRef<number>();
 
   useEffect(() => {
+    // Check if lite mode is enabled - don't render particles
+    const isLiteMode = document.documentElement.classList.contains('lite-mode') || 
+                       document.body.classList.contains('lite-mode');
+    if (isLiteMode) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -124,10 +129,17 @@ export const ParticleBackground = () => {
     };
   }, []);
 
+  // Check if lite mode - return null to not render at all
+  if (typeof window !== 'undefined' && 
+      (document.documentElement.classList.contains('lite-mode') || 
+       document.body.classList.contains('lite-mode'))) {
+    return null;
+  }
+
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-0"
+      className="particle-background fixed inset-0 pointer-events-none z-0"
       style={{ opacity: 0.6 }}
     />
   );

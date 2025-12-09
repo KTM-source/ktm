@@ -662,101 +662,135 @@ button, a, input, select, textarea {
 }
 
 /* ===== LITE MODE FOR ELECTRON LAUNCHER ===== */
-/* Reduces heavy animations and effects for better performance in Electron */
-/* IMPORTANT: Content must remain visible - only reduce effects intensity */
+/* Removes heavy effects (glow, blur, shadows) for better performance in Electron */
+/* Animations are preserved, only visual effects are removed */
 
-.lite-mode {
-  --transition-duration: 100ms !important;
-}
-
-/* Faster transitions but NOT zero */
-.lite-mode *,
-.lite-mode *::before,
-.lite-mode *::after {
-  transition-duration: 0.15s !important;
-  transition-delay: 0ms !important;
-}
-
-/* Disable ONLY heavy looping animations (particles, floating, pulse) */
-.lite-mode .animate-float,
-.lite-mode .animate-pulse,
-.lite-mode .animate-bounce,
-.lite-mode .animate-spin,
-.lite-mode .animate-ping,
-.lite-mode .animate-pulse-glow {
-  animation: none !important;
-}
-
-/* Keep fade-in animations but instant completion */
-.lite-mode .animate-fade-in {
-  animation: none !important;
-  opacity: 1 !important;
-  transform: translateY(0) !important;
-}
-
-/* Disable particle backgrounds */
-.lite-mode .particles,
-.lite-mode .particle-bg,
-.lite-mode [class*="particle"]:not(button):not(a):not(img):not(video) {
+/* ===== HIDE PARTICLES COMPLETELY ===== */
+.lite-mode canvas,
+.lite-mode .particle-background,
+.lite-mode [class*="particle"],
+.lite-mode .particles {
+  display: none !important;
+  visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
-/* Reduce glow effects intensity (not remove) */
-.lite-mode [class*="shadow-neon"],
-.lite-mode [class*="shadow-glow"] {
-  box-shadow: 0 0 10px hsl(var(--primary) / 0.15) !important;
+/* ===== REMOVE ALL SHADOWS ===== */
+.lite-mode,
+.lite-mode *,
+.lite-mode *::before,
+.lite-mode *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
 }
 
-/* Reduce blur effects (heavy on GPU) */
-.lite-mode [class*="backdrop-blur-xl"],
-.lite-mode [class*="backdrop-blur-2xl"],
-.lite-mode [class*="backdrop-blur-3xl"] {
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
+/* ===== REMOVE ALL BLUR EFFECTS ===== */
+.lite-mode .glass-morphism,
+.lite-mode .glass-card,
+.lite-mode [class*="backdrop-blur"],
+.lite-mode [class*="blur"],
+.lite-mode [style*="blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
 }
 
-.lite-mode [class*="backdrop-blur-lg"],
-.lite-mode [class*="backdrop-blur-md"] {
-  backdrop-filter: blur(2px) !important;
-  -webkit-backdrop-filter: blur(2px) !important;
+/* ===== REMOVE ALL GLOW EFFECTS ===== */
+.lite-mode .neon-border,
+.lite-mode .neon-text,
+.lite-mode .glass-glow,
+.lite-mode .glass-glow::after,
+.lite-mode .hover-glow,
+.lite-mode .hover-glow:hover,
+.lite-mode [class*="glow"],
+.lite-mode [class*="neon"] {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
 }
 
-/* Disable animated gradients but keep static gradients */
-.lite-mode [class*="animate-gradient"] {
-  animation: none !important;
-  background-size: 100% 100% !important;
-}
-
-/* Reduce heavy shadows */
-.lite-mode [class*="shadow-2xl"] {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
-}
-
-.lite-mode [class*="shadow-xl"] {
-  box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
-}
-
-/* Disable hover scale transforms */
-.lite-mode .hover\:scale-105:hover,
-.lite-mode .hover\:scale-110:hover,
-.lite-mode .group-hover\:scale-105,
-.lite-mode .group-hover\:scale-110 {
-  transform: scale(1.02) !important;
-}
-
-/* Carousel transitions - faster */
-.lite-mode .embla__slide {
-  transition-duration: 0.2s !important;
-}
-
-/* Simplify card hovers */
+/* ===== REMOVE GLOW BORDERS ===== */
+.lite-mode .game-card,
 .lite-mode .game-card:hover,
-.lite-mode .card:hover {
-  transform: translateY(-2px) !important;
+.lite-mode .game-card::before,
+.lite-mode .card,
+.lite-mode .card:hover,
+.lite-mode .btn-primary,
+.lite-mode .btn-primary:hover,
+.lite-mode .search-input,
+.lite-mode .search-input:focus,
+.lite-mode .category-badge,
+.lite-mode .category-badge:hover,
+.lite-mode .admin-card,
+.lite-mode .admin-card:hover,
+.lite-mode .stat-card,
+.lite-mode .stat-card:hover {
+  box-shadow: none !important;
 }
 
-/* Performance optimizations */
+/* ===== SIMPLIFY BACKGROUNDS ===== */
+.lite-mode .glass-morphism,
+.lite-mode .glass-card {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+/* ===== REMOVE PSEUDO-ELEMENT EFFECTS ===== */
+.lite-mode .glass-morphism::before,
+.lite-mode .glass-card::before,
+.lite-mode .game-card::before,
+.lite-mode .glass-glow::after,
+.lite-mode .nav-link::after {
+  display: none !important;
+}
+
+/* ===== BUTTON CLEANUP ===== */
+.lite-mode .btn-primary {
+  background: hsl(var(--primary)) !important;
+}
+
+.lite-mode .btn-primary::before {
+  display: none !important;
+}
+
+/* ===== FOCUS STATES WITHOUT GLOW ===== */
+.lite-mode *:focus,
+.lite-mode *:focus-visible {
+  outline: 2px solid hsl(var(--primary)) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+/* ===== HOVER STATES WITHOUT GLOW ===== */
+.lite-mode *:hover {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* ===== REDUCE IMAGE QUALITY FOR PERFORMANCE ===== */
+.lite-mode img {
+  image-rendering: optimizeSpeed !important;
+  -webkit-image-rendering: optimizeSpeed !important;
+}
+
+/* ===== DISABLE HEAVY LOOPING ANIMATIONS ONLY ===== */
+.lite-mode .animate-pulse,
+.lite-mode .animate-pulse-glow,
+.lite-mode .animate-glow-pulse,
+.lite-mode .animate-shimmer {
+  animation: none !important;
+}
+
+/* ===== KEEP NORMAL ANIMATIONS WORKING ===== */
+/* fade-in, slide-up, scale-in, etc. are preserved */
+
+/* ===== PERFORMANCE OPTIMIZATIONS ===== */
 .lite-mode * {
   will-change: auto !important;
+}
+
+/* ===== SCROLLBAR WITHOUT GLOW ===== */
+.lite-mode ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5) !important;
 }
