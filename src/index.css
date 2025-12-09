@@ -692,16 +692,12 @@ button, a, input, select, textarea {
 }
 
 /* ===== REMOVE ALL BLUR & FILTER EFFECTS ===== */
-.lite-mode *,
 .lite-mode .glass-morphism,
 .lite-mode .glass-card,
 .lite-mode [class*="backdrop-blur"],
-.lite-mode [class*="blur"],
-.lite-mode [style*="blur"],
-.lite-mode [class*="filter"] {
+.lite-mode [style*="blur"] {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  filter: none !important;
 }
 
 /* ===== REMOVE ALL GLOW EFFECTS ===== */
@@ -711,19 +707,17 @@ button, a, input, select, textarea {
 .lite-mode .glass-glow::after,
 .lite-mode .hover-glow,
 .lite-mode .hover-glow:hover,
-.lite-mode [class*="glow"],
-.lite-mode [class*="neon"],
-.lite-mode [class*="shadow"] {
+.lite-mode [class*="glow"]:not(img):not(video):not(picture),
+.lite-mode [class*="neon"] {
   box-shadow: none !important;
   text-shadow: none !important;
-  filter: none !important;
 }
 
-/* ===== REMOVE ALL GRADIENTS (Use solid colors) ===== */
-.lite-mode [class*="gradient"],
-.lite-mode [style*="gradient"] {
-  background-image: none !important;
-  background: hsl(var(--card)) !important;
+/* ===== SIMPLIFY GRADIENT TEXT (Keep image gradients) ===== */
+.lite-mode .gradient-text {
+  background: hsl(var(--primary)) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
 }
 
 /* ===== SIMPLIFY ALL CARDS ===== */
@@ -752,25 +746,14 @@ button, a, input, select, textarea {
   border: 1px solid hsl(var(--border)) !important;
 }
 
-/* ===== REMOVE ALL PSEUDO-ELEMENT EFFECTS ===== */
-.lite-mode *::before,
-.lite-mode *::after {
-  background-image: none !important;
-  box-shadow: none !important;
-  filter: none !important;
-}
-
+/* ===== REMOVE DECORATIVE PSEUDO-ELEMENT EFFECTS ===== */
 .lite-mode .glass-morphism::before,
 .lite-mode .glass-card::before,
-.lite-mode .game-card::before,
 .lite-mode .glass-glow::after,
-.lite-mode .nav-link::after,
 .lite-mode .btn-primary::before,
 .lite-mode .btn-primary::after,
 .lite-mode .category-badge::before,
-.lite-mode .featured-badge::before,
-.lite-mode .hero-section::before,
-.lite-mode .hero-section::after {
+.lite-mode .featured-badge::before {
   display: none !important;
   content: none !important;
 }
@@ -806,12 +789,14 @@ button, a, input, select, textarea {
   box-shadow: none !important;
 }
 
-/* ===== REDUCE IMAGE QUALITY FOR PERFORMANCE ===== */
+/* ===== ENSURE IMAGES ARE VISIBLE ===== */
 .lite-mode img,
 .lite-mode video,
 .lite-mode picture {
-  image-rendering: optimizeSpeed !important;
-  -webkit-image-rendering: optimizeSpeed !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  filter: none !important;
 }
 
 /* ===== DISABLE ALL LOOPING ANIMATIONS ===== */
@@ -836,9 +821,7 @@ button, a, input, select, textarea {
   transition-timing-function: linear !important;
 }
 
-/* ===== DISABLE HEAVY TRANSFORMS ===== */
-.lite-mode [class*="scale-"],
-.lite-mode [class*="rotate-"],
+/* ===== DISABLE HEAVY TRANSFORMS (Keep basic ones) ===== */
 .lite-mode [class*="skew-"] {
   transform: none !important;
 }
