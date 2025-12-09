@@ -662,125 +662,123 @@ button, a, input, select, textarea {
 }
 
 /* ===== LITE MODE FOR ELECTRON LAUNCHER ===== */
-/* Reduces heavy animations and effects for better performance in Electron */
-/* IMPORTANT: Content must remain visible - only reduce effects intensity */
+/* ============================================= */
+/* LITE MODE - Performance optimization for Electron */
+/* Only disable heavy effects, keep content visible */
+/* ============================================= */
 
 .lite-mode {
-  --transition-duration: 100ms !important;
+  --transition-duration: 100ms;
 }
 
-/* Faster transitions but NOT zero */
+/* Faster transitions */
 .lite-mode *,
 .lite-mode *::before,
 .lite-mode *::after {
   transition-duration: 0.1s !important;
-  transition-delay: 0ms !important;
+  animation-duration: 0.1s !important;
 }
 
-/* Disable ALL looping animations */
+/* Disable specific heavy animations */
 .lite-mode .animate-float,
 .lite-mode .animate-pulse,
 .lite-mode .animate-bounce,
 .lite-mode .animate-spin,
 .lite-mode .animate-ping,
-.lite-mode .animate-pulse-glow,
-.lite-mode [class*="animate-"] {
+.lite-mode .animate-pulse-glow {
   animation: none !important;
 }
 
-/* Keep fade-in animations but instant completion */
-.lite-mode .animate-fade-in {
+/* Instant fade-in */
+.lite-mode .animate-fade-in,
+.lite-mode .animate-scale-in {
   animation: none !important;
   opacity: 1 !important;
-  transform: translateY(0) !important;
+  transform: none !important;
 }
 
-/* Completely hide particle backgrounds */
-.lite-mode canvas,
-.lite-mode .particles,
-.lite-mode .particle-bg,
-.lite-mode [class*="particle"] {
+/* Hide ONLY particle canvas */
+.lite-mode canvas.particle-canvas,
+.lite-mode [class*="ParticleBackground"] canvas {
   display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
 }
 
-/* REMOVE all glow effects completely */
-.lite-mode [class*="shadow-neon"],
+/* Remove glow shadows but keep basic shadows */
+.lite-mode .shadow-neon-sm,
+.lite-mode .shadow-neon-md,
+.lite-mode .shadow-neon-lg,
 .lite-mode [class*="shadow-glow"],
-.lite-mode [class*="glow"],
-.lite-mode .neon-glow,
-.lite-mode .btn-primary::before,
-.lite-mode .btn-primary::after {
-  box-shadow: none !important;
+.lite-mode .neon-glow {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+}
+
+/* Remove text glow */
+.lite-mode .neon-text {
   text-shadow: none !important;
 }
 
-/* Remove glow borders */
-.lite-mode [class*="ring-"],
-.lite-mode [class*="border-primary"],
-.lite-mode [class*="border-neon"] {
-  box-shadow: none !important;
+/* Reduce blur intensity */
+.lite-mode .backdrop-blur-xl,
+.lite-mode .backdrop-blur-2xl,
+.lite-mode .backdrop-blur-3xl {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
 }
 
-/* Disable ALL blur effects */
-.lite-mode [class*="backdrop-blur"],
-.lite-mode [class*="blur-"] {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  filter: none !important;
+.lite-mode .backdrop-blur-lg,
+.lite-mode .backdrop-blur-md {
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
 }
 
 /* Disable animated gradients */
-.lite-mode [class*="animate-gradient"] {
+.lite-mode .animate-gradient {
   animation: none !important;
   background-size: 100% 100% !important;
 }
 
-/* Remove heavy shadows */
-.lite-mode [class*="shadow-2xl"],
-.lite-mode [class*="shadow-xl"],
-.lite-mode [class*="shadow-lg"] {
+/* Simplify shadows */
+.lite-mode .shadow-2xl {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important;
+}
+
+.lite-mode .shadow-xl {
   box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
 }
 
-/* Disable hover transforms */
+/* Reduce hover effects */
 .lite-mode .hover\:scale-105:hover,
-.lite-mode .hover\:scale-110:hover,
-.lite-mode .group-hover\:scale-105,
-.lite-mode .group-hover\:scale-110 {
-  transform: none !important;
+.lite-mode .hover\:scale-110:hover {
+  transform: scale(1.01) !important;
 }
 
-/* Simpler card hovers */
+.lite-mode .group:hover .group-hover\:scale-105,
+.lite-mode .group:hover .group-hover\:scale-110 {
+  transform: scale(1.01) !important;
+}
+
+/* Simplify card hovers */
 .lite-mode .game-card:hover,
 .lite-mode .card:hover {
-  transform: none !important;
+  transform: translateY(-2px) !important;
 }
 
-/* Reduce image quality for performance */
-.lite-mode img {
-  image-rendering: optimizeSpeed !important;
-}
-
-/* Performance optimizations */
+/* Performance hints */
 .lite-mode * {
   will-change: auto !important;
-  backface-visibility: hidden !important;
 }
 
-/* Remove glass-morphism effects */
+/* Simplify glass effect but keep visibility */
 .lite-mode .glass-morphism,
-.lite-mode .glass-card,
-.lite-mode [class*="glass"] {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background: hsl(var(--card)) !important;
-  border-color: hsl(var(--border)) !important;
+.lite-mode .glass-card {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
 }
 
-/* Disable neon text */
-.lite-mode .neon-text,
-.lite-mode [class*="neon-text"] {
-  text-shadow: none !important;
+/* Remove pseudo-element glows */
+.lite-mode .btn-primary::before,
+.lite-mode .btn-primary::after,
+.lite-mode .game-card::before,
+.lite-mode .game-card::after {
+  opacity: 0 !important;
 }
