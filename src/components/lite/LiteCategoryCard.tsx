@@ -12,7 +12,7 @@ interface LiteCategoryCardProps {
 
 export const LiteCategoryCard = ({ category }: LiteCategoryCardProps) => {
   return (
-    <Link to={`/category/${category.slug}`} className="lite-category-card">
+    <Link to={`/categories/${category.slug}`} className="lite-category-card">
       <div className="lite-category-icon">{category.icon}</div>
       <div className="lite-category-name">{category.name}</div>
       <div className="lite-category-count">{category.count} لعبة</div>

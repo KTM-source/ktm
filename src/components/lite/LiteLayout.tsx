@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { ReactNode } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface LiteLayoutProps {
   children: ReactNode;
@@ -8,13 +9,15 @@ interface LiteLayoutProps {
 const navLinks = [
   { path: "/", label: "الرئيسية" },
   { path: "/games", label: "جميع الألعاب" },
-  { path: "/top", label: "الأكثر مشاهدة" },
+  { path: "/top-games", label: "الأكثر مشاهدة" },
   { path: "/recent", label: "الأحدث" },
   { path: "/categories", label: "التصنيفات" },
+  { path: "/favorites", label: "المفضلة" },
 ];
 
 export const LiteLayout = ({ children }: LiteLayoutProps) => {
   const location = useLocation();
+  const { user, profile } = useAuth();
 
   return (
     <div className="lite-page">
@@ -34,6 +37,23 @@ export const LiteLayout = ({ children }: LiteLayoutProps) => {
                 {link.label}
               </Link>
             ))}
+          </div>
+          <div className="lite-nav-auth">
+            {user ? (
+              <Link to="/profile" className="lite-user-avatar">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="lite-avatar-img" />
+                ) : (
+                  <div className="lite-avatar-placeholder">
+                    {profile?.first_name?.charAt(0) || "U"}
+                  </div>
+                )}
+              </Link>
+            ) : (
+              <Link to="/auth" className="lite-button-small">
+                تسجيل الدخول
+              </Link>
+            )}
           </div>
         </div>
       </nav>

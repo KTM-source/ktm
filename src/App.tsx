@@ -42,6 +42,10 @@ import LiteCategories from "./pages/lite/LiteCategories";
 import LiteCategoryGames from "./pages/lite/LiteCategoryGames";
 import LiteTopGames from "./pages/lite/LiteTopGames";
 import LiteRecentGames from "./pages/lite/LiteRecentGames";
+import LiteFavorites from "./pages/lite/LiteFavorites";
+import LiteProfile from "./pages/lite/LiteProfile";
+import LiteAccount from "./pages/lite/LiteAccount";
+import LiteAuth from "./pages/lite/LiteAuth";
 
 // Lite mode CSS
 import "./lite.css";
@@ -73,15 +77,17 @@ const AppRoutes = () => {
       <Route path="/top-games" element={useLitePages ? <LiteTopGames /> : <TopGames />} />
       <Route path="/recent" element={useLitePages ? <LiteRecentGames /> : <RecentGames />} />
       
+      {/* User pages - switch between regular and lite */}
+      <Route path="/profile" element={useLitePages ? <LiteProfile /> : <Profile />} />
+      <Route path="/favorites" element={useLitePages ? <LiteFavorites /> : <Favorites />} />
+      <Route path="/auth" element={useLitePages ? <LiteAuth /> : <Auth />} />
+      <Route path="/account" element={useLitePages ? <LiteAccount /> : <Account />} />
+      
       {/* Pages that stay the same (no lite version needed) */}
       <Route path="/faq" element={<FAQ />} />
       <Route path="/how-to-download" element={<HowToDownload />} />
       <Route path="/contact" element={<ContactUs />} />
       <Route path="/report-issue" element={<ReportIssue />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/favorites" element={<Favorites />} />
-      <Route path="/auth" element={<Auth />} />
-      <Route path="/account" element={<Account />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/ktm-admin-panel" element={<Admin />} />
