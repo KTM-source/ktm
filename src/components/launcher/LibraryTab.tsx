@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Library, Play, Trash2, FolderOpen, Search, HardDrive, RefreshCw, ExternalLink, Gamepad2, Star, Clock, Sparkles } from 'lucide-react';
+import { Library, Play, Trash2, FolderOpen, Search, HardDrive, RefreshCw, ExternalLink, Gamepad2, Star, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useElectron, InstalledGame } from '@/hooks/useElectron';
+import { useRunningGames } from '@/hooks/useRunningGames';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
@@ -33,6 +43,7 @@ interface GameWithImage extends InstalledGame {
 
 const LibraryTab = () => {
   const { installedGames, launchGame, uninstallGame, openFolder, scanGamesFolder, isElectron } = useElectron();
+  const { isGameRunning, formatPlaytime, getGamePlaytime } = useRunningGames();
   const [searchQuery, setSearchQuery] = useState('');
   const [gameToUninstall, setGameToUninstall] = useState<InstalledGame | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -194,6 +205,7 @@ const LibraryTab = () => {
             <GameCard
               key={game.gameId}
               game={game}
+              isRunning={isGameRunning(game.gameId)}
               onLaunch={() => handleLaunch(game)}
               onOpenFolder={() => openFolder(game.installPath)}
               onUninstall={() => setGameToUninstall(game)}
@@ -225,12 +237,14 @@ const LibraryTab = () => {
 
 const GameCard = ({
   game,
+  isRunning,
   onLaunch,
   onOpenFolder,
   onUninstall,
   onViewPage
 }: {
   game: GameWithImage;
+  isRunning: boolean;
   onLaunch: () => void;
   onOpenFolder: () => void;
   onUninstall: () => void;
@@ -332,11 +346,26 @@ const GameCard = ({
         <div className="flex items-center gap-2 pt-1">
           <Button
             onClick={onLaunch}
-            className="flex-1 gap-2 bg-primary hover:bg-primary/90 h-10"
+            disabled={isRunning}
+            className={cn(
+              "flex-1 gap-2 h-10",
+              isRunning 
+                ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30" 
+                : "bg-primary hover:bg-primary/90"
+            )}
             size="sm"
           >
-            <Play className="w-4 h-4" />
-            تشغيل
+            {isRunning ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                قيد التشغيل
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                تشغيل
+              </>
+            )}
           </Button>
           
           <Button

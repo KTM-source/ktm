@@ -1,10 +1,10 @@
-import { Store, Download, Library, Shield } from 'lucide-react';
+import { Store, Download, Library, Shield, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useElectron } from '@/hooks/useElectron';
 
 interface LauncherNavProps {
-  activeTab: 'store' | 'downloads' | 'library' | 'admin';
-  onTabChange: (tab: 'store' | 'downloads' | 'library' | 'admin') => void;
+  activeTab: 'store' | 'downloads' | 'library' | 'stats' | 'admin';
+  onTabChange: (tab: 'store' | 'downloads' | 'library' | 'stats' | 'admin') => void;
   onSettingsClick: () => void;
 }
 
@@ -17,6 +17,7 @@ const LauncherNav = ({ activeTab, onTabChange, onSettingsClick }: LauncherNavPro
     { id: 'store' as const, label: 'المتجر', icon: Store },
     { id: 'downloads' as const, label: 'التنزيلات', icon: Download, badge: activeDownloads.length },
     { id: 'library' as const, label: 'المكتبة', icon: Library },
+    { id: 'stats' as const, label: 'الإحصائيات', icon: BarChart3 },
     { id: 'admin' as const, label: 'القاعدة', icon: Shield },
   ];
 

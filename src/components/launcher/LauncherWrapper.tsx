@@ -4,6 +4,7 @@ import LauncherNav from './LauncherNav';
 import LauncherSettings from './LauncherSettings';
 import DownloadsTab from './DownloadsTab';
 import LibraryTab from './LibraryTab';
+import StatsTab from './StatsTab';
 import { useElectron } from '@/hooks/useElectron';
 
 interface LauncherWrapperProps {
@@ -12,7 +13,7 @@ interface LauncherWrapperProps {
 
 const LauncherWrapper = ({ children }: LauncherWrapperProps) => {
   const { isElectron } = useElectron();
-  const [activeTab, setActiveTab] = useState<'store' | 'downloads' | 'library' | 'admin'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'downloads' | 'library' | 'stats' | 'admin'>('store');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminIframe, setAdminIframe] = useState<string | null>(null);
 
@@ -39,10 +40,11 @@ const LauncherWrapper = ({ children }: LauncherWrapperProps) => {
         onSettingsClick={() => setSettingsOpen(true)}
       />
       
-      <div>
+      <div className="min-h-[calc(100vh-80px)]">
         {activeTab === 'store' && children}
         {activeTab === 'downloads' && <div className="pt-20"><DownloadsTab /></div>}
         {activeTab === 'library' && <div className="pt-20"><LibraryTab /></div>}
+        {activeTab === 'stats' && <div className="pt-20"><StatsTab /></div>}
         {activeTab === 'admin' && (
           <div className="pt-20 h-[calc(100vh-5rem)]">
             <iframe 

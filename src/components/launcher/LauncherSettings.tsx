@@ -127,7 +127,7 @@ const LauncherSettings = ({ open, onOpenChange }: LauncherSettingsProps) => {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[750px] max-h-[85vh] overflow-hidden bg-background/95 backdrop-blur-xl border-border/50">
+        <DialogContent className="sm:max-w-[750px] max-h-[80vh] overflow-hidden bg-background/95 backdrop-blur-xl border-border/50 top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] fixed">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               <Settings className="w-5 h-5 text-primary animate-spin-slow" />

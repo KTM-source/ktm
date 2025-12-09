@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Download, X, FolderOpen, Clock, CheckCircle2, Loader2, Zap, HardDrive, Gauge, Archive } from 'lucide-react';
+import { Download, X, FolderOpen, Clock, CheckCircle2, Loader2, Zap, HardDrive, Gauge, Archive, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useElectron } from '@/hooks/useElectron';
 import type { DownloadProgress, InstalledGame } from '@/hooks/useElectron';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 const formatSize = (bytes: number) => {
   if (bytes === 0) return '0 B';
@@ -45,9 +45,9 @@ const formatETA = (downloaded: number, total: number, speed: number) => {
 
 const DownloadsTab = () => {
   const { activeDownloads, downloadHistory, cancelDownload, openFolder } = useElectron();
-  const [filter, setFilter] = useState<'active' | 'history'>('active');
 
-  const recentHistory = downloadHistory.filter((item) => {
+  // Filter completed downloads in last 24 hours
+  const completedDownloads = downloadHistory.filter((item) => {
     const downloadDate = new Date(item.installedAt);
     const now = new Date();
     const diffHours = (now.getTime() - downloadDate.getTime()) / (1000 * 60 * 60);
@@ -57,53 +57,20 @@ const DownloadsTab = () => {
   return (
     <div className="p-6 space-y-6 h-full overflow-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/30 to-purple-500/30 flex items-center justify-center border border-primary/30 shadow-lg shadow-primary/20">
-              <Download className="w-7 h-7 text-primary" />
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/30 to-purple-500/30 flex items-center justify-center border border-primary/30 shadow-lg shadow-primary/20">
+            <Download className="w-7 h-7 text-primary" />
+          </div>
+          {activeDownloads.length > 0 && (
+            <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
+              <span className="text-xs font-bold text-white">{activeDownloads.length}</span>
             </div>
-            {activeDownloads.length > 0 && (
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
-                <span className="text-xs font-bold text-white">{activeDownloads.length}</span>
-              </div>
-            )}
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">التنزيلات</h2>
-            <p className="text-sm text-muted-foreground">إدارة التنزيلات النشطة والسجل</p>
-          </div>
+          )}
         </div>
-        
-        <div className="flex gap-1 bg-muted/30 backdrop-blur-sm rounded-xl p-1 border border-border/30">
-          <button
-            onClick={() => setFilter('active')}
-            className={cn(
-              'px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300',
-              filter === 'active'
-                ? 'bg-gradient-to-r from-primary to-purple-500 text-white shadow-lg shadow-primary/30'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-            )}
-          >
-            <span className="flex items-center gap-2">
-              <Loader2 className={cn("w-4 h-4", activeDownloads.length > 0 && "animate-spin")} />
-              نشطة ({activeDownloads.length})
-            </span>
-          </button>
-          <button
-            onClick={() => setFilter('history')}
-            className={cn(
-              'px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300',
-              filter === 'history'
-                ? 'bg-gradient-to-r from-primary to-purple-500 text-white shadow-lg shadow-primary/30'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-            )}
-          >
-            <span className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              آخر 24 ساعة ({recentHistory.length})
-            </span>
-          </button>
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">التنزيلات</h2>
+          <p className="text-sm text-muted-foreground">إدارة التنزيلات النشطة والمكتملة</p>
         </div>
       </div>
 
@@ -131,44 +98,62 @@ const DownloadsTab = () => {
         </div>
       )}
 
-      {/* Content */}
-      {filter === 'active' ? (
-        <div className="space-y-4">
-          {activeDownloads.length === 0 ? (
-            <EmptyState
-              icon={<Download className="w-20 h-20" />}
-              title="لا توجد تنزيلات نشطة"
-              description="ابدأ بتحميل لعبة من المتجر لرؤيتها هنا"
-            />
-          ) : (
-            activeDownloads.map((download) => (
+      {/* Active Downloads Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Loader2 className={cn("w-5 h-5 text-primary", activeDownloads.length > 0 && "animate-spin")} />
+          <h3 className="text-lg font-bold text-foreground">التنزيلات النشطة</h3>
+          <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full font-medium">
+            {activeDownloads.length}
+          </span>
+        </div>
+        
+        {activeDownloads.length === 0 ? (
+          <EmptyState
+            icon={<Download className="w-16 h-16" />}
+            title="لا توجد تنزيلات نشطة"
+            description="ابدأ بتحميل لعبة من المتجر لرؤيتها هنا"
+          />
+        ) : (
+          <div className="space-y-4">
+            {activeDownloads.map((download) => (
               <ActiveDownloadCard
                 key={download.downloadId}
                 download={download}
                 onCancel={() => cancelDownload(download.downloadId)}
               />
-            ))
-          )}
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Completed Downloads Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-green-500" />
+          <h3 className="text-lg font-bold text-foreground">التنزيلات المكتملة</h3>
+          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full font-medium">
+            آخر 24 ساعة • {completedDownloads.length}
+          </span>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {recentHistory.length === 0 ? (
-            <EmptyState
-              icon={<Clock className="w-20 h-20" />}
-              title="لا توجد تنزيلات في آخر 24 ساعة"
-              description="سيظهر هنا سجل التنزيلات المكتملة"
-            />
-          ) : (
-            recentHistory.map((item, index) => (
-              <HistoryCard
+        
+        {completedDownloads.length === 0 ? (
+          <div className="bg-muted/20 rounded-xl p-8 text-center">
+            <Clock className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground">لا توجد تنزيلات مكتملة في آخر 24 ساعة</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {completedDownloads.map((item, index) => (
+              <CompletedDownloadCard
                 key={`${item.gameId}-${index}`}
                 item={item}
                 onOpenFolder={() => openFolder(item.installPath)}
               />
-            ))
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -307,51 +292,74 @@ const ActiveDownloadCard = ({
   );
 };
 
-const HistoryCard = ({
+const CompletedDownloadCard = ({
   item,
   onOpenFolder
 }: {
   item: InstalledGame;
   onOpenFolder: () => void;
 }) => {
+  const navigate = useNavigate();
+  
   return (
-    <div className="bg-muted/20 backdrop-blur-sm border border-border/30 rounded-xl p-4 flex items-center justify-between animate-fade-in hover:bg-muted/30 transition-all group">
+    <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 backdrop-blur-sm border border-green-500/20 rounded-xl p-4 flex items-center justify-between animate-fade-in hover:border-green-500/40 transition-all group">
       <div className="flex items-center gap-4">
         {/* Game image */}
-        <div className="w-12 h-16 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20 overflow-hidden border border-green-500/20">
+        <div className="relative w-14 h-18 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 overflow-hidden border border-green-500/20">
           {item.gameImage ? (
             <img src={item.gameImage} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5 text-green-500/50" />
+              <CheckCircle2 className="w-6 h-6 text-green-500/50" />
             </div>
           )}
+          {/* Success badge */}
+          <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+            <CheckCircle2 className="w-3 h-3 text-white" />
+          </div>
         </div>
         
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
-            <h3 className="font-semibold text-foreground">{item.gameTitle}</h3>
+            <h3 className="font-bold text-foreground">{item.gameTitle}</h3>
+            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
+              مكتمل
+            </span>
           </div>
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <HardDrive className="w-3 h-3" />
-            {formatSize(item.size)}
+          <p className="text-sm text-muted-foreground flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <HardDrive className="w-3.5 h-3.5" />
+              {formatSize(item.size)}
+            </span>
             <span className="opacity-50">•</span>
-            <Clock className="w-3 h-3" />
-            {formatTimeAgo(item.installedAt)}
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              {formatTimeAgo(item.installedAt)}
+            </span>
           </p>
         </div>
       </div>
       
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onOpenFolder}
-        className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all gap-2"
-      >
-        <FolderOpen className="w-4 h-4" />
-        فتح المجلد
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(`/${item.gameSlug}`)}
+          className="text-primary hover:text-primary/80 gap-2"
+        >
+          <Play className="w-4 h-4" />
+          تشغيل
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onOpenFolder}
+          className="text-muted-foreground hover:text-foreground gap-2"
+        >
+          <FolderOpen className="w-4 h-4" />
+          فتح المجلد
+        </Button>
+      </div>
     </div>
   );
 };
