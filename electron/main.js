@@ -17,6 +17,10 @@ let currentDownloadRequest = null;
 let installedGames = store.get('installedGames') || [];
 let downloadHistory = store.get('downloadHistory') || [];
 
+// Running games tracking
+let runningGames = new Map(); // gameId -> { process, startTime, gameTitle }
+let playtimeStats = store.get('playtimeStats') || []; // Array of { gameId, gameTitle, totalPlaytime, lastPlayed, sessions }
+
 // Settings with defaults
 let settings = store.get('settings') || {
   autoUpdate: true,
@@ -878,7 +882,7 @@ function createInstructionsFile(gameFolder, gameTitle) {
   }
 }
 
-// Cancel download
+// Cancel download and delete partial files
 ipcMain.handle('cancel-download', (event, downloadId) => {
   if (currentDownloadRequest) {
     try {
@@ -888,10 +892,34 @@ ipcMain.handle('cancel-download', (event, downloadId) => {
   }
   
   if (activeDownloads.has(downloadId)) {
+    const downloadData = activeDownloads.get(downloadId);
+    
+    // Delete partial download files
+    if (downloadData && downloadData.archivePath) {
+      try {
+        if (fs.existsSync(downloadData.archivePath)) {
+          fs.unlinkSync(downloadData.archivePath);
+          console.log('Deleted partial download:', downloadData.archivePath);
+        }
+        // Also try to delete the game folder if it's empty or only has partial files
+        const gameFolder = path.dirname(downloadData.archivePath);
+        if (fs.existsSync(gameFolder)) {
+          const files = fs.readdirSync(gameFolder);
+          // If folder is empty or only has the archive, delete it
+          if (files.length === 0) {
+            fs.rmdirSync(gameFolder);
+            console.log('Deleted empty game folder:', gameFolder);
+          }
+        }
+      } catch (err) {
+        console.error('Error deleting partial download:', err);
+      }
+    }
+    
     activeDownloads.delete(downloadId);
-    return true;
+    return { success: true, deleted: true };
   }
-  return false;
+  return { success: false };
 });
 
 // Get active downloads
@@ -980,21 +1008,110 @@ ipcMain.handle('scan-games-folder', async (event, websiteGames) => {
   }
 });
 
-// Launch game
+// Launch game and track running state
 ipcMain.handle('launch-game', async (event, { gameId, exePath }) => {
   const game = installedGames.find(g => g.gameId === gameId);
   
-  if (exePath && fs.existsSync(exePath)) {
-    shell.openPath(exePath);
-    return { success: true };
-  }
+  const launchPath = exePath && fs.existsSync(exePath) ? exePath : 
+                     (game?.exePath && fs.existsSync(game.exePath) ? game.exePath : null);
   
-  if (game?.exePath && fs.existsSync(game.exePath)) {
-    shell.openPath(game.exePath);
+  if (launchPath) {
+    shell.openPath(launchPath);
+    
+    // Track game as running
+    const exeName = path.basename(launchPath).toLowerCase();
+    runningGames.set(gameId, {
+      gameTitle: game?.gameTitle || 'Unknown',
+      exeName,
+      startTime: Date.now()
+    });
+    
+    // Notify renderer about game start
+    mainWindow?.webContents.send('game-started', {
+      gameId,
+      gameTitle: game?.gameTitle || 'Unknown'
+    });
+    
+    // Start monitoring this game process
+    startGameMonitoring(gameId, exeName, game?.gameTitle);
+    
     return { success: true };
   }
   
   return { success: false, needsExeSelection: true, installPath: game?.installPath };
+});
+
+// Monitor if game process is still running
+function startGameMonitoring(gameId, exeName, gameTitle) {
+  const checkInterval = setInterval(() => {
+    exec('tasklist /fo csv /nh', (error, stdout) => {
+      if (error) {
+        clearInterval(checkInterval);
+        return;
+      }
+      
+      const isRunning = stdout.toLowerCase().includes(exeName);
+      
+      if (!isRunning && runningGames.has(gameId)) {
+        // Game stopped
+        const gameData = runningGames.get(gameId);
+        const playTime = Math.floor((Date.now() - gameData.startTime) / 1000);
+        
+        // Update playtime stats
+        updatePlaytimeStats(gameId, gameTitle, playTime);
+        
+        runningGames.delete(gameId);
+        clearInterval(checkInterval);
+        
+        // Notify renderer
+        mainWindow?.webContents.send('game-stopped', {
+          gameId,
+          playTime
+        });
+      }
+    });
+  }, 5000); // Check every 5 seconds
+}
+
+// Update playtime statistics
+function updatePlaytimeStats(gameId, gameTitle, playTime) {
+  const existingIndex = playtimeStats.findIndex(s => s.gameId === gameId);
+  
+  if (existingIndex !== -1) {
+    playtimeStats[existingIndex].totalPlaytime += playTime;
+    playtimeStats[existingIndex].lastPlayed = new Date().toISOString();
+    playtimeStats[existingIndex].sessions += 1;
+  } else {
+    playtimeStats.push({
+      gameId,
+      gameTitle,
+      totalPlaytime: playTime,
+      lastPlayed: new Date().toISOString(),
+      sessions: 1
+    });
+  }
+  
+  store.set('playtimeStats', playtimeStats);
+}
+
+// Get running games
+ipcMain.handle('get-running-games', () => {
+  return Array.from(runningGames.entries()).map(([gameId, data]) => ({
+    gameId,
+    gameTitle: data.gameTitle,
+    startTime: data.startTime,
+    sessionTime: Math.floor((Date.now() - data.startTime) / 1000)
+  }));
+});
+
+// Get playtime stats
+ipcMain.handle('get-playtime-stats', () => {
+  return playtimeStats;
+});
+
+// Check if specific game is running
+ipcMain.handle('is-game-running', (event, gameId) => {
+  return runningGames.has(gameId);
 });
 
 // Uninstall game

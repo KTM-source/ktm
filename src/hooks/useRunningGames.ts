@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useElectron } from './useElectron';
 
 interface RunningGame {
   gameId: string;
@@ -16,86 +15,88 @@ interface GamePlaytime {
   sessions: number;
 }
 
-// Extended ElectronAPI interface for running games
-interface RunningGamesAPI {
-  getRunningGames?: () => Promise<RunningGame[]>;
-  getGamePlaytime?: () => Promise<GamePlaytime[]>;
-  isGameRunning?: (gameId: string) => Promise<boolean>;
-  onGameStarted?: (callback: (data: { gameId: string; gameTitle: string }) => void) => void;
-  onGameStopped?: (callback: (data: { gameId: string; playTime: number }) => void) => void;
-}
-
 export const useRunningGames = () => {
-  const { installedGames, isElectron } = useElectron();
+  const [isElectron] = useState(() => !!window.electronAPI?.isElectron);
   const [runningGames, setRunningGames] = useState<RunningGame[]>([]);
   const [playtimeStats, setPlaytimeStats] = useState<GamePlaytime[]>([]);
 
-  // Get the extended API
-  const getExtendedAPI = useCallback((): RunningGamesAPI | undefined => {
-    return window.electronAPI as unknown as RunningGamesAPI;
-  }, []);
+  // Fetch running games from Electron
+  const fetchRunningGames = useCallback(async () => {
+    if (!isElectron) return;
+    
+    try {
+      const api = window.electronAPI;
+      if (api && 'getRunningGames' in api) {
+        const games = await (api as any).getRunningGames();
+        setRunningGames(games || []);
+      }
+    } catch (e) {
+      console.error('Error fetching running games:', e);
+    }
+  }, [isElectron]);
 
-  // Poll for running games
+  // Fetch playtime stats from Electron
+  const fetchPlaytimeStats = useCallback(async () => {
+    if (!isElectron) return;
+    
+    try {
+      const api = window.electronAPI;
+      if (api && 'getPlaytimeStats' in api) {
+        const stats = await (api as any).getPlaytimeStats();
+        setPlaytimeStats(stats || []);
+      }
+    } catch (e) {
+      console.error('Error fetching playtime stats:', e);
+    }
+  }, [isElectron]);
+
+  // Poll for running games and setup event listeners
   useEffect(() => {
     if (!isElectron) return;
 
-    const api = getExtendedAPI();
-
-    const checkRunningGames = async () => {
-      if (api?.getRunningGames) {
-        try {
-          const games = await api.getRunningGames();
-          setRunningGames(games || []);
-        } catch (e) {
-          console.error('Error checking running games:', e);
-        }
-      }
-    };
-
-    const fetchPlaytime = async () => {
-      if (api?.getGamePlaytime) {
-        try {
-          const stats = await api.getGamePlaytime();
-          setPlaytimeStats(stats || []);
-        } catch (e) {
-          console.error('Error fetching playtime:', e);
-        }
-      }
-    };
-
     // Initial fetch
-    checkRunningGames();
-    fetchPlaytime();
+    fetchRunningGames();
+    fetchPlaytimeStats();
 
-    // Poll every 3 seconds
-    const interval = setInterval(() => {
-      checkRunningGames();
-    }, 3000);
+    // Poll every 3 seconds for running games
+    const runningInterval = setInterval(fetchRunningGames, 3000);
 
-    // Update playtime every 30 seconds
-    const playtimeInterval = setInterval(() => {
-      fetchPlaytime();
-    }, 30000);
+    // Update playtime stats every 30 seconds
+    const playtimeInterval = setInterval(fetchPlaytimeStats, 30000);
 
     // Listen for game events
-    api?.onGameStarted?.((data) => {
-      setRunningGames(prev => [...prev, { 
-        ...data, 
-        startTime: Date.now(), 
-        sessionTime: 0 
-      }]);
-    });
+    const api = window.electronAPI as any;
+    
+    if (api?.onGameStarted) {
+      api.onGameStarted((data: { gameId: string; gameTitle: string }) => {
+        setRunningGames(prev => {
+          if (prev.some(g => g.gameId === data.gameId)) return prev;
+          return [...prev, { 
+            ...data, 
+            startTime: Date.now(), 
+            sessionTime: 0 
+          }];
+        });
+      });
+    }
 
-    api?.onGameStopped?.((data) => {
-      setRunningGames(prev => prev.filter(g => g.gameId !== data.gameId));
-      fetchPlaytime();
-    });
+    if (api?.onGameStopped) {
+      api.onGameStopped((data: { gameId: string; playTime: number }) => {
+        setRunningGames(prev => prev.filter(g => g.gameId !== data.gameId));
+        // Refresh playtime stats
+        fetchPlaytimeStats();
+      });
+    }
 
     return () => {
-      clearInterval(interval);
+      clearInterval(runningInterval);
       clearInterval(playtimeInterval);
+      if (api?.removeAllListeners) {
+        api.removeAllListeners('game-started');
+        api.removeAllListeners('game-stopped');
+      }
     };
-  }, [isElectron, getExtendedAPI]);
+  }, [isElectron, fetchRunningGames, fetchPlaytimeStats]);
 
   const isGameRunning = useCallback((gameId: string) => {
     return runningGames.some(g => g.gameId === gameId);
