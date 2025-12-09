@@ -64,7 +64,7 @@ interface ElectronAPI {
   uninstallLauncher: () => Promise<{ success: boolean; error?: string }>;
   clearDownloadHistory: () => Promise<{ success: boolean }>;
   downloadGame: (data: { gameId: string; gameTitle: string; downloadUrl: string; gameSlug: string; gameImage?: string }) => Promise<{ success: boolean; installPath?: string; exePath?: string }>;
-  cancelDownload: (downloadId: string) => Promise<boolean>;
+  cancelDownload: (downloadId: string) => Promise<{ success: boolean; deleted?: boolean }>;
   getActiveDownloads: () => Promise<DownloadProgress[]>;
   getDownloadHistory: () => Promise<InstalledGame[]>;
   getInstalledGames: () => Promise<InstalledGame[]>;
@@ -74,12 +74,19 @@ interface ElectronAPI {
   openFolder: (path: string) => Promise<boolean>;
   selectExe: (gameId: string) => Promise<{ success: boolean; exePath?: string; error?: string }>;
   scanGamesFolder: (websiteGames: WebsiteGame[]) => Promise<{ success: boolean; games?: InstalledGame[]; error?: string }>;
+  // Running games & playtime
+  getRunningGames: () => Promise<{ gameId: string; gameTitle: string; startTime: number; sessionTime: number }[]>;
+  getPlaytimeStats: () => Promise<{ gameId: string; gameTitle: string; totalPlaytime: number; lastPlayed: string; sessions: number }[]>;
+  isGameRunning: (gameId: string) => Promise<boolean>;
+  // Event listeners
   onDownloadProgress: (callback: (data: DownloadProgress) => void) => void;
   onDownloadStatus: (callback: (data: { downloadId: string; gameId: string; status: string; message?: string }) => void) => void;
   onDownloadComplete: (callback: (data: { downloadId: string; gameId: string; gameTitle: string; installPath: string; exePath: string | null }) => void) => void;
   onDownloadError: (callback: (data: { downloadId: string; gameId: string; error: string }) => void) => void;
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => void;
   onThemeChanged: (callback: (theme: string) => void) => void;
+  onGameStarted: (callback: (data: { gameId: string; gameTitle: string }) => void) => void;
+  onGameStopped: (callback: (data: { gameId: string; playTime: number }) => void) => void;
   removeAllListeners: (channel: string) => void;
   isElectron: boolean;
 }

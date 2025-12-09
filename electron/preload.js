@@ -30,6 +30,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectExe: (gameId) => ipcRenderer.invoke('select-exe', gameId),
   scanGamesFolder: (websiteGames) => ipcRenderer.invoke('scan-games-folder', websiteGames),
   
+  // Running games & playtime tracking
+  getRunningGames: () => ipcRenderer.invoke('get-running-games'),
+  getPlaytimeStats: () => ipcRenderer.invoke('get-playtime-stats'),
+  isGameRunning: (gameId) => ipcRenderer.invoke('is-game-running', gameId),
+  
   // Event listeners
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (event, data) => callback(data));
@@ -48,6 +53,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onThemeChanged: (callback) => {
     ipcRenderer.on('theme-changed', (event, theme) => callback(theme));
+  },
+  onGameStarted: (callback) => {
+    ipcRenderer.on('game-started', (event, data) => callback(data));
+  },
+  onGameStopped: (callback) => {
+    ipcRenderer.on('game-stopped', (event, data) => callback(data));
   },
   
   // Remove listeners
