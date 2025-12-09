@@ -3,12 +3,13 @@ import {
   Settings, FolderOpen, HardDrive, Info, Palette, Bell, 
   Download, Shield, Zap, Monitor, Volume2, Globe, 
   RefreshCw, Trash2, Database, Cpu, MemoryStick, Power,
-  Lock, AlertTriangle, CheckCircle2
+  Lock, AlertTriangle, CheckCircle2, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useElectron } from '@/hooks/useElectron';
+import { useLiteMode } from '@/hooks/useLiteMode';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ interface SystemInfo {
 
 const LauncherSettings = ({ open, onOpenChange }: LauncherSettingsProps) => {
   const { downloadPath, changeDownloadPath, installedGames, downloadHistory, isElectron, settings: electronSettings, saveSettings, getSystemInfo, uninstallLauncher, clearDownloadHistory } = useElectron();
+  const { isLiteMode, toggleLiteMode } = useLiteMode();
   const [isChangingPath, setIsChangingPath] = useState(false);
   const [showUninstallDialog, setShowUninstallDialog] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -434,6 +436,35 @@ const LauncherSettings = ({ open, onOpenChange }: LauncherSettingsProps) => {
 
               {/* Performance Settings */}
               <TabsContent value="performance" className="space-y-4 mt-0">
+                <div className="bg-muted/30 rounded-xl p-4 space-y-4">
+                  <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    التأثيرات البصرية
+                  </h3>
+                  
+                  <SettingRow
+                    icon={<Sparkles className="w-4 h-4" />}
+                    title="Light Mode"
+                    description="إزالة التأثيرات والأنيميشنات لتحسين الأداء (Glow, Blur, Particles)"
+                    control={
+                      <Switch 
+                        checked={isLiteMode} 
+                        onCheckedChange={(v) => {
+                          toggleLiteMode(v);
+                          toast.success(v ? 'تم تفعيل الوضع الخفيف' : 'تم إلغاء الوضع الخفيف');
+                        }} 
+                      />
+                    }
+                  />
+                  
+                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 text-sm">
+                    <p className="font-medium mb-1 text-primary">✨ Light Mode</p>
+                    <p className="text-xs opacity-80 text-foreground/70">
+                      يزيل الأنيميشنات، تأثيرات Glow و Blur، والجزيئات المتحركة لتحسين أداء اللانشر. مُفعّل افتراضياً.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="bg-muted/30 rounded-xl p-4 space-y-4">
                   <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
                     <Cpu className="w-4 h-4 text-primary" />
