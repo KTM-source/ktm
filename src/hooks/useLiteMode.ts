@@ -23,9 +23,8 @@ export const useLiteMode = () => {
       applyLiteMode(false);
     }
 
-    return () => {
-      applyLiteMode(false);
-    };
+    // Don't remove on cleanup - let it persist
+    return () => {};
   }, []);
 
   const applyLiteMode = (enabled: boolean) => {

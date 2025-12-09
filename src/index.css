@@ -668,18 +668,15 @@ button, a, input, select, textarea {
 /* ============================================= */
 
 .lite-mode {
-  --transition-duration: 100ms;
+  --transition-duration: 150ms;
 }
 
-/* Faster transitions */
-.lite-mode *,
-.lite-mode *::before,
-.lite-mode *::after {
-  transition-duration: 0.1s !important;
-  animation-duration: 0.1s !important;
+/* Faster transitions - but NOT animation-duration which breaks things */
+.lite-mode * {
+  transition-duration: 0.15s !important;
 }
 
-/* Disable specific heavy animations */
+/* Disable specific heavy looping animations only */
 .lite-mode .animate-float,
 .lite-mode .animate-pulse,
 .lite-mode .animate-bounce,
@@ -689,25 +686,17 @@ button, a, input, select, textarea {
   animation: none !important;
 }
 
-/* Instant fade-in */
-.lite-mode .animate-fade-in,
-.lite-mode .animate-scale-in {
+/* Make fade-in instant but visible */
+.lite-mode .animate-fade-in {
   animation: none !important;
   opacity: 1 !important;
-  transform: none !important;
+  visibility: visible !important;
 }
 
-/* Hide ONLY particle canvas */
-.lite-mode canvas.particle-canvas,
-.lite-mode [class*="ParticleBackground"] canvas {
-  display: none !important;
-}
-
-/* Remove glow shadows but keep basic shadows */
+/* Remove glow shadows */
 .lite-mode .shadow-neon-sm,
 .lite-mode .shadow-neon-md,
 .lite-mode .shadow-neon-lg,
-.lite-mode [class*="shadow-glow"],
 .lite-mode .neon-glow {
   box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
 }
@@ -731,12 +720,6 @@ button, a, input, select, textarea {
   -webkit-backdrop-filter: blur(2px) !important;
 }
 
-/* Disable animated gradients */
-.lite-mode .animate-gradient {
-  animation: none !important;
-  background-size: 100% 100% !important;
-}
-
 /* Simplify shadows */
 .lite-mode .shadow-2xl {
   box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important;
@@ -752,11 +735,6 @@ button, a, input, select, textarea {
   transform: scale(1.01) !important;
 }
 
-.lite-mode .group:hover .group-hover\:scale-105,
-.lite-mode .group:hover .group-hover\:scale-110 {
-  transform: scale(1.01) !important;
-}
-
 /* Simplify card hovers */
 .lite-mode .game-card:hover,
 .lite-mode .card:hover {
@@ -768,7 +746,7 @@ button, a, input, select, textarea {
   will-change: auto !important;
 }
 
-/* Simplify glass effect but keep visibility */
+/* Simplify glass effect */
 .lite-mode .glass-morphism,
 .lite-mode .glass-card {
   backdrop-filter: blur(4px) !important;
@@ -777,7 +755,9 @@ button, a, input, select, textarea {
 
 /* Remove pseudo-element glows */
 .lite-mode .btn-primary::before,
-.lite-mode .btn-primary::after,
+.lite-mode .btn-primary::after {
+  opacity: 0 !important;
+}
 .lite-mode .game-card::before,
 .lite-mode .game-card::after {
   opacity: 0 !important;
