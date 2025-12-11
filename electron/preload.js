@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.send('window-close'),
   getWindowState: () => ipcRenderer.invoke('get-window-state'),
   
+  // App version
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
@@ -15,10 +18,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uninstallLauncher: () => ipcRenderer.invoke('uninstall-launcher'),
   clearDownloadHistory: () => ipcRenderer.invoke('clear-download-history'),
   
-  // Downloads
+  // Downloads with pause/resume support
   downloadGame: (data) => ipcRenderer.invoke('download-game', data),
+  pauseDownload: (downloadId) => ipcRenderer.invoke('pause-download', downloadId),
+  resumeDownload: (downloadId) => ipcRenderer.invoke('resume-download', downloadId),
   cancelDownload: (downloadId) => ipcRenderer.invoke('cancel-download', downloadId),
   getActiveDownloads: () => ipcRenderer.invoke('get-active-downloads'),
+  getPausedDownloads: () => ipcRenderer.invoke('get-paused-downloads'),
   getDownloadHistory: () => ipcRenderer.invoke('get-download-history'),
   
   // Installed games
@@ -27,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   launchGame: (data) => ipcRenderer.invoke('launch-game', data),
   uninstallGame: (gameId) => ipcRenderer.invoke('uninstall-game', gameId),
   openFolder: (path) => ipcRenderer.invoke('open-folder', path),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   selectExe: (gameId) => ipcRenderer.invoke('select-exe', gameId),
   scanGamesFolder: (websiteGames) => ipcRenderer.invoke('scan-games-folder', websiteGames),
   

@@ -46,6 +46,9 @@ import LiteFavorites from "./pages/lite/LiteFavorites";
 import LiteProfile from "./pages/lite/LiteProfile";
 import LiteAccount from "./pages/lite/LiteAccount";
 import LiteAuth from "./pages/lite/LiteAuth";
+import LiteFAQ from "./pages/lite/LiteFAQ";
+import LiteHowToDownload from "./pages/lite/LiteHowToDownload";
+import LiteContactUs from "./pages/lite/LiteContactUs";
 
 // Lite mode CSS
 import "./lite.css";
@@ -83,10 +86,12 @@ const AppRoutes = () => {
       <Route path="/auth" element={useLitePages ? <LiteAuth /> : <Auth />} />
       <Route path="/account" element={useLitePages ? <LiteAccount /> : <Account />} />
       
-      {/* Pages that stay the same (no lite version needed) */}
-      <Route path="/faq" element={<FAQ />} />
-      <Route path="/how-to-download" element={<HowToDownload />} />
-      <Route path="/contact" element={<ContactUs />} />
+      {/* Pages that switch between regular and lite */}
+      <Route path="/faq" element={useLitePages ? <LiteFAQ /> : <FAQ />} />
+      <Route path="/how-to-download" element={useLitePages ? <LiteHowToDownload /> : <HowToDownload />} />
+      <Route path="/contact" element={useLitePages ? <LiteContactUs /> : <ContactUs />} />
+      
+      {/* Pages that stay the same */}
       <Route path="/report-issue" element={<ReportIssue />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
