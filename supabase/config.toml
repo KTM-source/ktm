@@ -1,4 +1,4 @@
-project_id = "yhfmsdtlocosfduhymge"
+project_id = ""
 
 [functions.verify-admin]
 verify_jwt = false
