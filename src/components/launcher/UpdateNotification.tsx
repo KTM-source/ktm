@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 
 const CURRENT_VERSION = 'v1.0.0'; // This should match the installed launcher version
 const VERSION_CHECK_URL = 'https://ktm.lovable.app/version.txt';
-const DOWNLOAD_URL = 'https://github.com/KTM-Games/launcher/releases/latest/download/KTM-Launcher-Setup.exe';
+const DOWNLOAD_URL = 'https://github.com/KTM-source/ktm/releases/download/v1.1.0/KTM.Launcher-1.1.0.exe';
 
 interface UpdateNotificationProps {
   onClose?: () => void;
